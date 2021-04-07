@@ -84,7 +84,6 @@ public class App2 extends Application {
 	private static Pane[][] sqArray = new Pane[12][12];
 	private static GridPane grid = new GridPane();
 	private static TextArea console = new TextArea();
-	private static ScrollPane consoleContainer = new ScrollPane();
 	private static StringBuilder sb = new StringBuilder();
 	private static Color gridColor1 = new Color(85.0/255,80.0/255,79.0/255,(256-87.0)/255);
 	private static Color gridColor2 = new Color(1,1,1,1);
@@ -92,51 +91,54 @@ public class App2 extends Application {
 	private static int pawnMaxAC = 1;
 	private static int pawnMaxDC = 1;
 	private static int pawnMC = 0;
-	private static int pawnHP = 1;
+	private static int pawnValue = 1;
 	
 	private static int swordsmanMaxAC = 4;
 	private static int swordsmanMaxDC = 2;
 	private static int swordsmanMC = 1;
-	private static int swordsmanHP = 2;
+	private static int swordsmanValue = 4;
 	
 	private static int vanguardMaxAC = 3;
 	private static int vanguardMaxDC = 5;
 	private static int vanguardMC = 2;
-	private static int vanguardHP = 8;
+	private static int vanguardValue = 6;
 	
 	private static int scytheMaxAC = 1;
 	private static int scytheMaxDC = 3;
 	private static int scytheMC = 1;
-	private static int scytheHP = 3;
+	private static int scytheValue = 5;
 	
 	private static int princeMaxAC = 4;
 	private static int princeMaxDC = 4;
 	private static int princeMC = 2;
-	private static int princeHP = 9;
+	private static int princeValue = 6;
 	
 	private static int guardianMaxAC = 4;
 	private static int guardianMaxDC = 9;
 	private static int guardianMC = 2;
-	private static int guardianHP = 12;
+	private static int guardianValue = 9;
 	
 	private static int spearmanMaxAC = 2;
 	private static int spearmanMaxDC = 3;
 	private static int spearmanMC = 2;
-	private static int spearmanHP = 3;
+	private static int spearmanValue = 5;
 	
 	private static int generalMaxAC = 5;
-	private static int generalMaxDC = 5;
+	private static int generalMaxDC = 0;
 	private static int generalMC = 3;
-	private static int generalHP = 7;
+	private static int generalValue = 15;
 	
 	private static int queenMaxAC = 5;
 	private static int queenMaxDC = 6;
 	private static int queenMC = 3;
-	private static int queenHP = 17;
+	private static int queenValue = 32;
 	
 
 	
-	
+	/*
+	 * GUI element initialization
+	 * GUI event handlers
+	 */
 	
 	@Override
 	public void start(Stage window) throws Exception {
@@ -159,7 +161,7 @@ public class App2 extends Application {
 		VBox overview = new VBox();		
 		VBox generalInfo = new VBox();		
 		VBox pieceView = new VBox();
-		VBox rightSide = new VBox(consoleContainer,overview);
+		VBox rightSide = new VBox(console,overview);
 		TextArea pieceInfo = new TextArea();
 		pieceInfo.setPrefHeight(300);
 		HBox pieceMenu = new HBox();		
@@ -187,13 +189,12 @@ public class App2 extends Application {
 		menu.getChildren().addAll(mainMenu, new Separator(), turnMenu);
 		
 		//sizings and anchors
-		//consoleContainer.setPrefSize(500, 150);	
-		consoleContainer.setContent(console);
+		console.setPrefSize(350, 450);	
 		main.setLeft(initBoard(grid));
 		main.setBottom(menu);
 		main.setRight(rightSide);
 		AnchorPane.setTopAnchor(menu, 750.0);
-		AnchorPane.setLeftAnchor(consoleContainer, 750.0);
+		AnchorPane.setLeftAnchor(console, 750.0);
 		AnchorPane.setTopAnchor(overview, 450.0);
 		AnchorPane.setLeftAnchor(overview, 750.0);
 		AnchorPane.setTopAnchor(pieceView, 800.0);
@@ -231,7 +232,7 @@ public class App2 extends Application {
 					List<int[]> n = arg0.getAddedSubList();
 					//get legal moves in an array, used to check moves legality after drag-and-drop was completed in redraw()
 					legalMoves = n.toArray();
-					System.out.println("lgt after adding: "+legalMoves.length);
+					System.out.println("length of added move list: "+legalMoves.length);
 					
 					for (int[] is : n) {
 						int x = is[0];
@@ -246,6 +247,7 @@ public class App2 extends Application {
 					}
 					
 					List<int[]> n2 = arg0.getRemoved();
+					System.out.println("length of removed move list: "+n2.size());
 					for (int[] is : n2) {
 						int x = is[0];
 	 					int y = is[1];
@@ -253,6 +255,7 @@ public class App2 extends Application {
 								//((Rectangle)(sqArray[y][x].getChildren().get(0))).setFill(new Color(85.0/255,80.0/255,79.0/255,(256-87.0)/255));
 						}
 						else {
+							System.out.println(x+" "+y);
 							((ImageView)(sqArray[y][x].getChildren().get(1))).setImage(null);
 						}
 					}
@@ -270,28 +273,62 @@ public class App2 extends Application {
 
 			@Override
 			public void onChanged(Change arg0) {
+				for(int i = 0; i<11; i++) {
+					for(int j = 0; j<11; j++) {
+						if(board[i][j] == null) {
+							if(((ImageView)(sqArray[j][i].getChildren().get(1))).getImage() != null) {
+								System.out.println("setting "+i+" "+j+" to null");
+								((ImageView)(sqArray[j][i].getChildren().get(1))).setImage(null);
+							}
+						}
+						else {
+							if(Math.pow(-1, i+j) == 1) {
+								((Rectangle)(sqArray[j][i].getChildren().get(0))).setFill(gridColor2);
+							}
+							else {
+								((Rectangle)(sqArray[j][i].getChildren().get(0))).setFill(gridColor1);
+							}
+							
+						}
+					}
+				}
+				
 				while(arg0.next()) {
 					List<int[]> n = arg0.getAddedSubList();
 					
 					legalRange = n.toArray();
 					
-					System.out.println(n.size()+" is size");
+					System.out.println("length of added range list: "+legalRange.length);
 					
 					for (int[] is : n) {
 						int x = is[0];
 	 					int y = is[1];
-
-	 					((ImageView)(sqArray[y][x].getChildren().get(1))).setImage(new Image(getClass().getClassLoader().getResource("resources/mark_marker.png").toExternalForm(),64,64,true,true));
-
+	 					
+	 					if(board[x][y] == null) {
+		 					if(attackMode) {
+		 						((ImageView)(sqArray[y][x].getChildren().get(1))).setImage(new Image(getClass().getClassLoader().getResource("resources/att_marker.png").toExternalForm(),64,64,true,true));
+		 					}
+		 					else if(markingMode){
+		 						((ImageView)(sqArray[y][x].getChildren().get(1))).setImage(new Image(getClass().getClassLoader().getResource("resources/mark_marker.png").toExternalForm(),64,64,true,true));
+		 					}
+	 					}
+	 					else {
+	 						if(attackMode) {
+	 							((Rectangle)(sqArray[y][x].getChildren().get(0))).setFill(new Color(255.0/255,80.0/255,79.0/255,(256-87.0)/255));	 					
+	 						}
+	 					}
 					}
+					
 					List<int[]> n2 = arg0.getRemoved();
+					System.out.println("length of removed range list: "+n2.size());
 					for (int[] is : n2) {
 						int x = is[0];
 	 					int y = is[1];
 	 					if(squareContent(x,y) != null) {
-								//((Rectangle)(sqArray[y][x].getChildren().get(0))).setFill(new Color(85.0/255,80.0/255,79.0/255,(256-87.0)/255));
+								((Rectangle)(sqArray[y][x].getChildren().get(0))).setFill(new Color(85.0/255,80.0/255,79.0/255,(256-87.0)/255));
 						}
 						else {
+							System.out.println(x+" "+y);
 							((ImageView)(sqArray[y][x].getChildren().get(1))).setImage(null);
 						}
 					}
@@ -305,12 +342,18 @@ public class App2 extends Application {
 		scene.addEventHandler(KeyEvent.KEY_PRESSED, key -> {
 			if(key.getCode() == KeyCode.SHIFT) {
 				attackMode = true;
+				parseId(startPane.getId(),1);
+				getRange();
 			}
 			else if(key.getCode() == KeyCode.ALT) {
 				markingMode = true;
+
+				getRange();
 			}
 			else if(key.getCode() == KeyCode.CONTROL) {
 				defenseMode = true;
+				parseId(startPane.getId(),2);
+				getRange();
 			}
 
 		});
@@ -318,12 +361,23 @@ public class App2 extends Application {
 		scene.addEventHandler(KeyEvent.KEY_RELEASED, key -> {
 			if(key.getCode() == KeyCode.SHIFT) {
 				attackMode = false;
+				System.out.println(legalMovesObs.size()+"????");
+				legalMovesObs.clear();
+				legalMoves = null;
+				getRange();
+				getLegalSquares();
 			}
 			else if(key.getCode() == KeyCode.ALT) {
 				markingMode = false;
+
+				//getRange();
+				getLegalSquares();
 			}
 			else if(key.getCode() == KeyCode.CONTROL) {
 				defenseMode = false;
+
+				//getRange();
+				getLegalSquares();
 			}
 
 		});
@@ -374,28 +428,28 @@ public class App2 extends Application {
 			String s = "";
 			switch(newValue.intValue()) {
 			case 1:
-				s = "Pawn \nAttack Cost: "+pawnMaxAC+"\nDefense Cost: "+pawnMaxDC+"\nMove cost: "+pawnMC+"\nValue: "+1;
+				s = "Pawn (p) \nAttack Cost: "+pawnMaxAC+"\nDefense Cost: "+pawnMaxDC+"\nMove cost: "+pawnMC+"\nValue: "+1;
 				break;
 			case 2:
-				s = "Swordsman \nAttack Cost: "+swordsmanMaxAC+"\nDefense Cost: "+swordsmanMaxDC+"\nMove cost: "+swordsmanMC+"\nValue: "+4; 
+				s = "Swordsman (f) \nAttack Cost: "+swordsmanMaxAC+"\nDefense Cost: "+swordsmanMaxDC+"\nMove cost: "+swordsmanMC+"\nValue: "+4; 
 				break;
 			case 3:
-				s = "Vanguard \nAttack Cost: "+vanguardMaxAC+"\nDefense Cost: "+vanguardMaxDC+"\nMove cost: "+vanguardMC+"\nValue: "+6; 
+				s = "Vanguard (v) \nAttack Cost: "+vanguardMaxAC+"\nDefense Cost: "+vanguardMaxDC+"\nMove cost: "+vanguardMC+"\nValue: "+6; 
 				break;
 			case 4:
-				s = "Scythe \nAttack Cost: "+scytheMaxAC+"\nDefense Cost: "+scytheMaxDC+"\nMove cost: "+scytheMC+"\nValue: "+5;
+				s = "Scythe (h) \nAttack Cost: "+scytheMaxAC+"\nDefense Cost: "+scytheMaxDC+"\nMove cost: "+scytheMC+"\nValue: "+5;
 				break;
 			case 5:
-				s = "Prince \nAttack Cost: "+princeMaxAC+"\nDefense Cost: "+princeMaxDC+"\nMove cost: "+princeMC+"\nValue: "+6;
+				s = "Prince (r) \nAttack Cost: "+princeMaxAC+"\nDefense Cost: "+princeMaxDC+"\nMove cost: "+princeMC+"\nValue: "+6;
 				break;
 			case 6:
-				s = "Guardian \nAttack Cost: "+guardianMaxAC+"\nDefense Cost: "+guardianMaxDC+"\nMove cost: "+guardianMC+"\nValue: 9";
+				s = "Guardian (g) \nAttack Cost: "+guardianMaxAC+"\nDefense Cost: "+guardianMaxDC+"\nMove cost: "+guardianMC+"\nValue: "+9;
 				break;
 			case 7:
-				s = "Spearman \nAttack Cost: "+spearmanMaxAC+"\nDefense Cost: "+spearmanMaxDC+"\nMove cost: "+spearmanMC+"\nValue: 5";
+				s = "Spearman (s) \nAttack Cost: "+spearmanMaxAC+"\nDefense Cost: "+spearmanMaxDC+"\nMove cost: "+spearmanMC+"\nValue: "+5;
 				break;
 			case 8:
-				s = "General \nAttack Cost: "+generalMaxAC+"\nDefense Cost: "+generalMaxDC+"\nMove cost: "+generalMC+"\nValue: 15";
+				s = "General (k) \nAttack Cost: "+generalMaxAC+"\nDefense Cost: "+generalMaxDC+"\nMove cost: "+generalMC+"\nValue: "+15;
 				break;
 			}
 			pieceInfo.setText(s);
@@ -414,6 +468,10 @@ public class App2 extends Application {
 		
 	}
 	
+	/*
+	 * save current position for reset() method
+	 */
+	
 	private void savePos(int[][][] b) {
 		tempCounters[0] = p1counters.get();
 		tempCounters[1] = p1countersPerTurn.get();
@@ -423,6 +481,10 @@ public class App2 extends Application {
 		
 	}
 	
+	/*
+	 * reset counter data
+	 */
+	
 	private void resetPlayerCounters() {
 		p1counters.set(tempCounters[0]);
 		p1countersPerTurn.set(tempCounters[1]);
@@ -430,6 +492,10 @@ public class App2 extends Application {
 		p2countersPerTurn.set(tempCounters[3]);
 		moved = false;
 	}
+	
+	/*
+	 * resign game
+	 */
 	
 	private void resign(int turn) {
 		gameRunning = false;
@@ -442,47 +508,52 @@ public class App2 extends Application {
 		
 	}
 	
+	
+	/*
+	 * get starting position
+	 */
+	
 	private GridPane initBoard(GridPane grid) {
 		
 		//id, type, color, x, y, char, counters, hp, ac, dc, mc
 
-		board[0][0] = new int[] {1,2,2,0,0,70,4,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC};
-		board[0][1] = new int[] {2,3,2,0,1,86,6,8, vanguardMaxAC, vanguardMaxDC, vanguardMC};
-		board[0][2] = new int[] {3,7,2,0,2,83,5,3, spearmanMaxAC, spearmanMaxDC, spearmanMC};
-		board[0][3] = new int[] {4,5,2,0,3,82,6,5, princeMaxAC, princeMaxDC, princeMC};
-		board[0][4] = new int[] {5,6,2,0,4,71,9,12, guardianMaxAC, guardianMaxDC, guardianMC};
-		board[0][5] = new int[] {6,8,2,0,5,75,15,6, generalMaxAC, generalMaxDC, generalMC};
-		board[0][6] = new int[] {7,6,2,0,6,71,9,12, guardianMaxAC, guardianMaxDC, guardianMC};
-		board[0][7] = new int[] {8,5,2,0,7,82,6,5, princeMaxAC, princeMaxDC, princeMC};
-		board[0][8] = new int[] {9,7,2,0,8,83,5,3, spearmanMaxAC, spearmanMaxDC, spearmanMC};
-		board[0][9] = new int[] {10,3,2,0,9,86,6,8, vanguardMaxAC, vanguardMaxDC, vanguardMC};
-		board[0][10] = new int[] {11,2,2,0,10,70,4,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC};
+		board[0][0] = new int[] {1,2,2,0,0,102,swordsmanValue,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC};
+		board[0][1] = new int[] {2,3,2,0,1,118,vanguardValue,8, vanguardMaxAC, vanguardMaxDC, vanguardMC};
+		board[0][2] = new int[] {3,7,2,0,2,115,spearmanValue,3, spearmanMaxAC, spearmanMaxDC, spearmanMC};
+		board[0][3] = new int[] {4,5,2,0,3,114,princeValue,5, princeMaxAC, princeMaxDC, princeMC};
+		board[0][4] = new int[] {5,6,2,0,4,103,guardianValue,12, guardianMaxAC, guardianMaxDC, guardianMC};
+		board[0][5] = new int[] {6,8,2,0,5,107,generalValue,6, generalMaxAC, generalMaxDC, generalMC};
+		board[0][6] = new int[] {7,6,2,0,6,103,guardianValue,12, guardianMaxAC, guardianMaxDC, guardianMC};
+		board[0][7] = new int[] {8,5,2,0,7,114,princeValue,5, princeMaxAC, princeMaxDC, princeMC};
+		board[0][8] = new int[] {9,7,2,0,8,115,spearmanValue,3, spearmanMaxAC, spearmanMaxDC, spearmanMC};
+		board[0][9] = new int[] {10,3,2,0,9,118,vanguardValue,8, vanguardMaxAC, vanguardMaxDC, vanguardMC};
+		board[0][10] = new int[] {11,2,2,0,10,102,swordsmanValue,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC};
 		board[0][11] = null;
 		
-		board[10][0] = new int[] {34,2,1,10,0,102,4,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC};
-		board[10][1] = new int[] {35,3,1,10,1,118,6,8, vanguardMaxAC, vanguardMaxDC, vanguardMC};
-		board[10][2] = new int[] {36,7,1,10,2,115,5,3, spearmanMaxAC, spearmanMaxDC, spearmanMC};
-		board[10][3] = new int[] {37,5,1,10,3,114,6,5, princeMaxAC, princeMaxDC, princeMC};
-		board[10][4] = new int[] {38,6,1,10,4,103,9,12, guardianMaxAC, guardianMaxDC, guardianMC};
-		board[10][5] = new int[] {39,8,1,10,5,107,15,6, generalMaxAC, generalMaxDC, generalMC};
-		board[10][6] = new int[] {40,6,1,10,6,103,9,12, guardianMaxAC, guardianMaxDC, guardianMC};
-		board[10][7] = new int[] {41,5,1,10,7,114,6,5, princeMaxAC, princeMaxDC, princeMC};
-		board[10][8] = new int[] {42,7,1,10,8,115,5,3, spearmanMaxAC, spearmanMaxDC, spearmanMC};
-		board[10][9] = new int[] {43,3,1,10,9,118,6,8, vanguardMaxAC, vanguardMaxDC, vanguardMC};
-		board[10][10] = new int[]{44,2,1,10,10,102,4,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC};
+		board[10][0] = new int[] {34,2,1,10,0,102,swordsmanValue,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC};
+		board[10][1] = new int[] {35,3,1,10,1,118,vanguardValue,8, vanguardMaxAC, vanguardMaxDC, vanguardMC};
+		board[10][2] = new int[] {36,7,1,10,2,115,spearmanValue,3, spearmanMaxAC, spearmanMaxDC, spearmanMC};
+		board[10][3] = new int[] {37,5,1,10,3,114,princeValue,5, princeMaxAC, princeMaxDC, princeMC};
+		board[10][4] = new int[] {38,6,1,10,4,103,guardianValue,12, guardianMaxAC, guardianMaxDC, guardianMC};
+		board[10][5] = new int[] {39,8,1,10,5,107,generalValue,6, generalMaxAC, generalMaxDC, generalMC};
+		board[10][6] = new int[] {40,6,1,10,6,103,guardianValue,12, guardianMaxAC, guardianMaxDC, guardianMC};
+		board[10][7] = new int[] {41,5,1,10,7,114,princeValue,5, princeMaxAC, princeMaxDC, princeMC};
+		board[10][8] = new int[] {42,7,1,10,8,115,spearmanValue,3, spearmanMaxAC, spearmanMaxDC, spearmanMC};
+		board[10][9] = new int[] {43,3,1,10,9,118,vanguardValue,8, vanguardMaxAC, vanguardMaxDC, vanguardMC};
+		board[10][10] = new int[]{44,2,1,10,10,102,swordsmanValue,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC};
 		board[11][11] = null;
 		
 		
 		
 		for(int i = 0; i<11; i++) {
 			if(i == 3 || i == 7) {
-				board[1][i] = new int[] {12+i,4,2,1,i,72,5,6,scytheMaxAC,scytheMaxDC,scytheMC};
-				board[9][i] = new int[] {23+i,4,1,9,i,104,5,6,scytheMaxAC,scytheMaxDC,scytheMC};
+				board[1][i] = new int[] {12+i,4,2,1,i,104,scytheValue,6,scytheMaxAC,scytheMaxDC,scytheMC};
+				board[9][i] = new int[] {23+i,4,1,9,i,104,scytheValue,6,scytheMaxAC,scytheMaxDC,scytheMC};
 				continue;
 			}
 			
-			board[1][i] = new int[] {12+i,1,2,1,i,80,1,1,pawnMaxAC, pawnMaxDC, pawnMC};
-			board[9][i] = new int[] {23+i,1,1,9,i,112,1,1,pawnMaxAC, pawnMaxDC, pawnMC};
+			board[1][i] = new int[] {12+i,1,2,1,i,112,pawnValue,1,pawnMaxAC, pawnMaxDC, pawnMC};
+			board[9][i] = new int[] {23+i,1,1,9,i,112,pawnValue,1,pawnMaxAC, pawnMaxDC, pawnMC};
 			
 		}
 		
@@ -561,18 +632,18 @@ public class App2 extends Application {
 				
 
 				if(squareContent(temp,temp2) != null) {
-					if(squareContent(temp,temp2).equals("piece_m")) {
+					if(squareContent(temp,temp2).equals("piece_m_b")) {
 						piece.setImage(new Image(getClass().getClassLoader().getResource("resources/mark_area_r.png").toExternalForm(),64,64,true,true));	
 					}
-					else if(squareContent(temp, temp2).equals("piece_M")) {
+					else if(squareContent(temp, temp2).equals("piece_m_r")) {
 						piece.setImage(new Image(getClass().getClassLoader().getResource("resources/mark_area_b.png").toExternalForm(),64,64,true,true));
 					}
-					else if(squareContent(temp,temp2).equals("piece_d")) {
-						piece.setImage(new Image(getClass().getClassLoader().getResource("resources/mark_def.png").toExternalForm(),64,64,true,true));
-					}
-					else if(squareContent(temp,temp2).equals("piece_D")) {
-						piece.setImage(new Image(getClass().getClassLoader().getResource("resources/mark_def.png").toExternalForm(),64,64,true,true));
-					}
+//					else if(squareContent(temp,temp2).equals("piece_d")) {
+//						piece.setImage(new Image(getClass().getClassLoader().getResource("resources/mark_def.png").toExternalForm(),64,64,true,true));
+//					}
+//					else if(squareContent(temp,temp2).equals("piece_D")) {
+//						piece.setImage(new Image(getClass().getClassLoader().getResource("resources/mark_def.png").toExternalForm(),64,64,true,true));
+//					}
 					else {
 						piece.setImage(new Image(getClass().getClassLoader().getResource("resources/"+squareContent(temp,temp2)+".png").toExternalForm(),64,64,true,true));
 					}
@@ -593,13 +664,22 @@ public class App2 extends Application {
 					
 					int t = temp;
 					int t2 = temp2;
-						
+				
+					if((board[t][t2] != null)) {
+						System.out.println( (board[t][t2] == null) +" "+(board[t][t2][2] == turn.get() )+" "+ 
+							(board[t][t2][2] != turn.get() && attackMode) );
+					}
+					
+					
 					//a == null OR a.color = turn, a not null AND a.color == turn, a == null,
 					if(board[t][t2] == null || board[t][t2][2] == turn.get() || (board[t][t2][2] != turn.get() && attackMode)) {
-
+						System.out.println("&&");
+						System.out.println("t "+t+" t2 "+t2);
+						
 						//reset legal moves / ranges
 						legalMovesObs.clear();
 						legalMoves = null;
+
 
 						//iterate 11x11 board squares, get squares which represent legal moves / range for this piece
 						if(board[t][t2] != null) {
@@ -612,23 +692,20 @@ public class App2 extends Application {
 						//only reset legal range if piece was not selected
 						if(!awaitingSquare) {
 							legalRange = null;
+
+							getRange();					
+							startPane = p;
+							awaitingSquare = true;
+
+							if(!moved) {
+								getLegalSquares();
+							}
 							
-							if(markingMode || attackMode || defenseMode) {
-								getRange();					
-								startPane = p;
-								awaitingSquare = true;
-							}
-							//is moving
-							else {
-								if(!moved) {
-									getLegalSquares();
-								}
-							}
 						}
 						//piece was selected, is current (temp,temp2) pane contained in legalRange, if so,
 						//place mark OR attack OR defend
 						else if(isLegal(temp,temp2,legalRange)){
-							System.out.println("attackMode "+attackMode);
+							
 							if(markingMode) {
 								if(((turn.get()==1 && p1counters.get() >= p1countersPerTurn.get()) ||
 									(turn.get()==2 && p2counters.get() >= p2countersPerTurn.get())) 
@@ -641,9 +718,10 @@ public class App2 extends Application {
 								
 							}
 							else if(attackMode){
-								System.out.println("£");
-								parseId(startPane.getId(),1);
-								System.out.println("#"+p1counters.get()+"#"+attackSource[0]);
+								
+								
+								System.out.println("#"+p1counters.get()+"#"+attackSource[0]+"#"+attackSource[1]+"#"+attackSource[2]);
+								
 								if((turn.get()==1 && p1counters.get() >= board[attackSource[1]][attackSource[2]][8]) ||
 								   (turn.get()==2 && p2counters.get() >= board[attackSource[1]][attackSource[2]][8])
 								    && !RuleSet.iterateRange(attackSource[1], attackSource[2], temp, temp2, board, true, true, true)) {
@@ -667,19 +745,18 @@ public class App2 extends Application {
 							
 						}
 						else if(board[temp][temp2] != null && board[temp][temp2][2] == turn.get()) {
-							System.out.println("%");
-							if(markingMode || attackMode || defenseMode) {
-								legalRangeObs.clear();
-								getRange();		
-								startPane = p;
+
+							legalRangeObs.clear();
+							getRange();		
+							startPane = p;
+
+
+							if(!moved) {
+								legalMovesObs.clear();
+								getLegalSquares();
 							}
-							else {
-								if(!moved) {
-									legalMovesObs.clear();
-									getLegalSquares();
-								}
 								
-							}
+							
 						}
 
 					}
@@ -723,6 +800,7 @@ public class App2 extends Application {
 							
 							makeMove(temp,temp2,grid);
 							moveTarget = new int[] {temp,temp2};
+							
 						}
 						
 					}
@@ -778,6 +856,10 @@ public class App2 extends Application {
 		return grid;
 	}
 	
+	
+	/*
+	 * is (paneX,paneY) contained in legal squares?
+	 */
 
 	private boolean isLegal(int paneX, int paneY, Object[] list) {
 		//System.out.println("lgth:"+legalMoves.length);
@@ -802,9 +884,13 @@ public class App2 extends Application {
 	}
 	
 	
+	/*
+	 * depending on mode, fill source arrays using id string to be used when printing info to console
+	 */
+	
 	private void parseId(String id,int mode){
 		
-		
+		System.out.println("parsing: "+id);
 		
 		if(mode == 0) {
 			moveSource = new int[3];
@@ -844,6 +930,9 @@ public class App2 extends Application {
 		}
 	}
 	
+	/*
+	 * move a piece to (tX,tY) and update board with redraw()
+	 */
 	
 	private void makeMove(int tX, int tY,GridPane grid) {
 		
@@ -857,24 +946,27 @@ public class App2 extends Application {
 		else if(piece[2] == 2) {
 			p2counters.set(p2counters.get() - piece[10]);
 		}
-		
+
 		//make the move from start coordinates parsed from start Pane id string
 		board[tX][tY] = board[moveSource[1]][moveSource[2]];
 		board[moveSource[1]][moveSource[2]] = null;
 		redraw(grid);
 
+		legalMoves = null;
+		legalRange = null;
+		list.clear();
+		list2.clear();
+		getLegalSquares();
+		getRange();
 		moved = true;
 	}
 	
+	/*
+	 * Place mark at (x,y) and update board with redraw()
+	 */
 	
 	private void placeMark(int x, int y,GridPane grid) {
-		int markChar;
-		if(turn.get() == 1) {
-			markChar = 109;
-		}
-		else {
-			markChar = 77;
-		}
+		int markChar = 109;
 		
 		if(turn.get() == 1) {
 			p1counters.set(p1counters.get()-p1countersPerTurn.get());
@@ -884,7 +976,7 @@ public class App2 extends Application {
 			p2counters.set(p2counters.get()-p2countersPerTurn.get());
 			p2countersPerTurn.set(p2countersPerTurn.get()+1);
 		}
-		System.out.println("#");
+
 		board[x][y] = new int[] {markId,-1,turn.get(),x,y,markChar,1};
 		redraw(grid);
 		markId--;
@@ -894,6 +986,9 @@ public class App2 extends Application {
 		}
 	}
 	
+	/*
+	 * Attack piece at square (x,y)
+	 */
 	
 	private void attack(int x, int y) {
 		//increment counters by piece value
@@ -907,7 +1002,9 @@ public class App2 extends Application {
 		redraw(grid);
 	}
 	
-	//placing defense mark at square for one turn
+	/*placing defense mark at square (x,y) for one turn
+	 * 
+	 */
 	
 	private void defend(int x, int y,ImageView p) {
 		int markChar;
@@ -963,6 +1060,10 @@ public class App2 extends Application {
 	 * 
 	 * 		
 	 * 
+	 */
+	
+	/*
+	 * handle printing move data into console after turn changes
 	 */
 	
 	private void setTurn(int[] movSource, int[] movTarget, int[] markTgt, 
@@ -1055,6 +1156,7 @@ public class App2 extends Application {
 		
 		console.textProperty().set(sb.toString());
 		console.setText(sb.toString());
+		console.appendText("");
 		
 		System.out.println("current turn "+turn+", turn no: "+turnNumber.get()+" halfturns: "+halfTurns.get()+"\n");
 
@@ -1066,9 +1168,19 @@ public class App2 extends Application {
 		defenderSource = null;
 		defendTarget = null;
 		moved = false;
+		
+		legalMoves = null;
+		legalRange = null;
+		list.clear();
+		list2.clear();
+		getRange();
+		getLegalSquares();
 
 	}
 	
+	/*
+	 * form necessary string for a piece or mark to get the corresponding image from resources/
+	 */
 	
 	private String squareContent(int x, int y) {
 		int[] element = board[x][y];
@@ -1079,10 +1191,18 @@ public class App2 extends Application {
 		}
 
 		
-		return "piece_"+ (char) element[5];
+	
+		return "piece_"+ (char) element[5] + '_' + (element[2] == 1 ? 'b' : 'r');
+		
+		
+		
 
 	}
 	
+	
+	/*
+	 * coordinate transform from [0-10] to [a-k]
+	 */
 	
 	private char charConv(int y) {
 		switch(y) {
@@ -1112,6 +1232,12 @@ public class App2 extends Application {
 			return 'x';
 		}
 	}
+	
+	
+	/*
+	 * iterate whole board and fill legal moves and legal range arrays, depending on when matrix,matrix2 returned from RuleSet
+	 * contain '1' at current square
+	 */
 	
 	private void iterateBoard(Pane p,int i,int j, Pane[][] sqArray) {
 
@@ -1175,7 +1301,9 @@ public class App2 extends Application {
 	 */
 	
 	private void getRange() {
-		legalRangeObs.addAll(list2);
+		if(list2 != null) {
+			legalRangeObs.addAll(list2);
+		}
 		
 	}
 	
@@ -1185,7 +1313,11 @@ public class App2 extends Application {
 	 */
 	
 	private void getLegalSquares() {
-		legalMovesObs.addAll(list);
+		System.out.println("changed"+list.size());
+		if(list != null) {
+			legalMovesObs.addAll(list);
+		}
+		
 	}
 	
 	
@@ -1196,9 +1328,8 @@ public class App2 extends Application {
 	public void arrayCopy(int[][][] b1, int[][][] b2) {
 		for(int i = 0; i < 12;i++) {
 			for(int j = 0;j < 12;j++) {
-				for(int k = 0; k < b1[0][0].length; k++) {
-					b2[j][i] = b1[j][i];
-				}
+				b2[j][i] = b1[j][i];
+
 			}
 		}
 	}
