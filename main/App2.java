@@ -1,7 +1,9 @@
 package main;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Random;
 
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -12,12 +14,10 @@ import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.event.EventHandler;
-import javafx.scene.Node;
-import javafx.scene.Parent;
+import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextArea;
 import javafx.scene.image.Image;
@@ -31,7 +31,6 @@ import javafx.scene.input.MouseEvent;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -39,6 +38,8 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
+import network.Mesh;
+import network.Message;
 
 public class App2 extends Application {
 	
@@ -48,17 +49,22 @@ public class App2 extends Application {
 	public static SimpleIntegerProperty turn = new SimpleIntegerProperty(1); //1 for black, 2 for red
 	private static int markId = -1;
 	public static int startCounters = 1;
-	public static SimpleIntegerProperty halfTurns = new SimpleIntegerProperty(0);
+	public static int startIncome = 0;
+	public static int playerColor = -1;
+	private static int otherPlayerColor = -2;
+	private static boolean otherPlayerReady = false;
+	public static SimpleIntegerProperty halfTurns = new SimpleIntegerProperty(1);
 	public static SimpleIntegerProperty counters = new SimpleIntegerProperty(0);
 	public static SimpleIntegerProperty p1counters = new SimpleIntegerProperty(startCounters);
 	public static SimpleIntegerProperty p2counters = new SimpleIntegerProperty(startCounters);
-	public static SimpleIntegerProperty p1countersPerTurn = new SimpleIntegerProperty(0);
-	public static SimpleIntegerProperty p2countersPerTurn = new SimpleIntegerProperty(0);
-	public static SimpleIntegerProperty turnNumber = new SimpleIntegerProperty(0);
+	public static SimpleIntegerProperty p1countersPerTurn = new SimpleIntegerProperty(startIncome);
+	public static SimpleIntegerProperty p2countersPerTurn = new SimpleIntegerProperty(startIncome);
+	public static SimpleIntegerProperty turnNumber = new SimpleIntegerProperty(1);
 	public static SimpleIntegerProperty showingPiece = new SimpleIntegerProperty();
-	private static int[] tempCounters = new int[4];; 
+	private static int[] tempCounters = new int[4]; 
 	
 	private static boolean gameRunning = true;
+	private static boolean freePlay = true;
 	private static boolean attackMode = false;
 	private static boolean defenseMode = false;
 	private static boolean markingMode = false;
@@ -73,17 +79,18 @@ public class App2 extends Application {
 	ArrayList<int[]> list2;
 
 	private boolean moved = false;
-	private static int[] moveSource;
-	private static int[] attackSource;
-	private static int[] defenderSource;
-	private static int[] moveTarget;
-	private static int[] attackTarget;
-	private static int[] defendTarget;
-	private static int[] markTarget;
+	private static int[] moveSource = new int[] {-1, -1,-1};
+	private static int[] attackSource = new int[] {-1, -1,-1};
+	//private static int[] defenderSource;
+	private static int[] moveTarget = new int[] {-1, -1};
+	private static int[] attackTarget = new int[] {-1, -1};
+	//private static int[] defendTarget;
+	private static int[] markTarget = new int[] {-1, -1};
 
 	private static Pane[][] sqArray = new Pane[12][12];
 	private static GridPane grid = new GridPane();
 	private static TextArea console = new TextArea();
+	public static TextArea statusConsole = new TextArea();
 	private static StringBuilder sb = new StringBuilder();
 	private static Color gridColor1 = new Color(85.0/255,80.0/255,79.0/255,(256-87.0)/255);
 	private static Color gridColor2 = new Color(1,1,1,1);
@@ -134,7 +141,10 @@ public class App2 extends Application {
 	private static int queenValue = 32;
 	
 
-	
+	private Mesh mesh;
+	private int[] move;
+
+	private static Random rng = new Random();
 	/*
 	 * GUI element initialization
 	 * GUI event handlers
@@ -142,15 +152,51 @@ public class App2 extends Application {
 	
 	@Override
 	public void start(Stage window) throws Exception {
-		//AnchorPane fp = new AnchorPane();
+		System.out.println("this App2 ref: "+this);
+		
+
 		BorderPane main = new BorderPane();
 		Scene scene = new Scene(main,1080,960);
 		window.setScene(scene);
 		window.show();
 		
+		/*
+		 * notification Scene
+		 */
+		Stage window2 = new Stage();
+		BorderPane nPanel = new BorderPane();
+		Label question = new Label("Save game?");
+		Button affBtn = new Button("Yes");
+		Button decBtn = new Button("No");
+		nPanel.setLeft(affBtn);
+		nPanel.setRight(decBtn);
+		nPanel.setTop(question);
+		Scene notifyScreen = new Scene(nPanel,400,260);
+		window2.setScene(notifyScreen);
+		affBtn.setOnAction(e -> {
+				saveGame();
+				window2.hide();
+				resetWholeGame();
+			}
+		);
+		decBtn.setOnAction(e -> {
+				window2.hide();
+				resetWholeGame();
+			}
+		);
+		
+		
+		
 		//laying out all the elements
-		Button start = new Button("start new game");
+		Button start = new Button("host new game");
+		Button connect = new Button("connect to game");
+		Button chooseColor1 = new Button("black");
+		Button chooseColor2 = new Button("red");
+		Button startGame = new Button("start");
+		Button randomColor = new Button("random");
 		Button load = new Button("load game");
+		Button save = new Button("save game");
+		Button resetGame = new Button("reset game");
 		Button resign = new Button("resign");
 		Button reset = new Button("reset");
 		Button endTurn = new Button("end turn");
@@ -166,26 +212,33 @@ public class App2 extends Application {
 		pieceInfo.setPrefHeight(300);
 		HBox pieceMenu = new HBox();		
 		VBox markView = new VBox();	
-		TextArea markInfo = new TextArea();
 		HBox markMenu = new HBox();		
-		Label p1counterText = new Label(String.valueOf(startCounters));
-		Label p2counterText = new Label(String.valueOf(startCounters));
-		Label p1countersPerTurnText = new Label("0");
-		Label p2countersPerTurnText = new Label("0");
+		Label p1counterText = new Label("Black counters: "+String.valueOf(startCounters));
+		Label p2counterText = new Label("Red counters: "+String.valueOf(startCounters));
+		Label p1countersPerTurnText = new Label("Black counters per turn: "+String.valueOf(startIncome));
+		Label p2countersPerTurnText = new Label("Red counters per turn: "+String.valueOf(startIncome));
+		chooseColor1.setVisible(false);
+		chooseColor2.setVisible(false);
+		randomColor.setVisible(false);
+		startGame.setVisible(false);
 		p1countersPerTurn.set(0);
 		p2countersPerTurn.set(0);
+		
+		mainMenu.setSpacing(5);
+		overview.setSpacing(5);
+		generalInfo.setSpacing(5);
+		startGame.setPrefSize(65, 100);
 		endTurn.setPrefSize(100, 50);
 		reset.setPrefSize(100, 50);
 		
 		//sidebar hierarchy
-		generalInfo.getChildren().addAll(p1counterText,p1countersPerTurnText,p2counterText,p2countersPerTurnText,endTurn,reset);
-		generalInfo.setSpacing(5);
+		generalInfo.getChildren().addAll(p1counterText,p1countersPerTurnText,p2counterText,p2countersPerTurnText,endTurn,reset);	
 		overview.getChildren().addAll(generalInfo,pieceView,markView);
 		pieceView.getChildren().addAll(pieceInfo,pieceMenu);
-		markView.getChildren().addAll(markInfo,markMenu);
+		markView.getChildren().addAll(statusConsole,markMenu);
 
 		//bottom menu hierarchy
-		mainMenu.getChildren().addAll(start,load,exit,resign);
+		mainMenu.getChildren().addAll(start,connect,chooseColor1,chooseColor2,randomColor, resetGame, save,load,exit,resign,startGame);
 		menu.getChildren().addAll(mainMenu, new Separator(), turnMenu);
 		
 		//sizings and anchors
@@ -193,32 +246,9 @@ public class App2 extends Application {
 		main.setLeft(initBoard(grid));
 		main.setBottom(menu);
 		main.setRight(rightSide);
-		AnchorPane.setTopAnchor(menu, 750.0);
-		AnchorPane.setLeftAnchor(console, 750.0);
-		AnchorPane.setTopAnchor(overview, 450.0);
-		AnchorPane.setLeftAnchor(overview, 750.0);
-		AnchorPane.setTopAnchor(pieceView, 800.0);
-		AnchorPane.setLeftAnchor(pieceView, 750.0);
+		BorderPane.setMargin(rightSide, new Insets(10));
 		
-		//add everything to root node
-		//fp.getChildren().addAll(initBoard(grid),menu,console,overview);
-
-		
-		turn.addListener((observableValue,oldValue,newValue)-> {
-			
-			System.out.println((newValue.intValue() == 1 ? "Black" : "Red")+ " turn started");
-			
-			if(newValue.intValue() == 1) {
-				p1counters.set(p1counters.get() + p1countersPerTurn.get());
-			}
-			else {
-				p2counters.set(p2counters.get() + p2countersPerTurn.get());
-			}
-			
-			savePos(board);
-			
-		});
-	
+		temp1();
 		
 		
 		//listener for tracking changes to legalMovesObs array, 
@@ -399,6 +429,113 @@ public class App2 extends Application {
 			p2countersPerTurnText.setText("Red counters / turn: "+String.valueOf(newValue));
 		});
 		
+		
+		start.setOnAction(e -> {
+			mesh = new Mesh(2000,this);
+			statusConsole.appendText("server started\n");
+			mesh.start();
+			chooseColor1.setVisible(true);
+			chooseColor2.setVisible(true);
+			randomColor.setVisible(true);
+			freePlay = false;
+		});
+		
+		connect.setOnAction(e -> {
+			mesh = new Mesh(2001,this);
+			statusConsole.appendText("client started\n");
+			mesh.start();
+			try {
+	            String address = "localhost";
+	            statusConsole.appendText("Connecting to server at "+address+":2000\n");
+	            // ...or at least somebody should be
+	            mesh.connect(address, 2000);
+	        } catch(Exception e1) {
+	            e1.printStackTrace();
+	        }
+			chooseColor1.setVisible(true);
+			chooseColor2.setVisible(true);
+			randomColor.setVisible(true);
+			freePlay = false;
+		});
+		
+		chooseColor1.setOnAction(e -> {
+			playerColor = 1;
+			isDefaultBoardRotation = true;
+			redraw(grid);
+			statusConsole.appendText("Black selected\n");
+			startGame.setVisible(true);
+		});
+		
+		chooseColor2.setOnAction(e -> {
+			playerColor = 2;
+			isDefaultBoardRotation = false;
+			redraw(grid);
+			statusConsole.appendText("Red selected\n");
+			startGame.setVisible(true);
+		});
+		
+		randomColor.setOnAction(e -> {
+			playerColor = rng.nextInt(2)+1;
+			Message msgObject;
+			if(playerColor == 1) {
+				otherPlayerColor = 2;
+				msgObject = new Message(2, Message.Tyyppi.RNG);
+			}
+			else {
+				otherPlayerColor = 1;
+				msgObject = new Message(1, Message.Tyyppi.RNG);
+			}
+			msgObject.setSender(this.toString());
+			mesh.broadcast(msgObject);
+			statusConsole.appendText(playerColor == 1 ? "Black" : "Red" + "rolled\n");
+		});
+		
+		startGame.setOnAction(e -> {
+			
+			if(playerColor < 0 || otherPlayerColor < 0) {
+				System.out.println(playerColor+" "+otherPlayerColor);
+				statusConsole.appendText("waiting for other player\n");
+			}
+			
+	        if(otherPlayerReady) {
+	        	if(playerColor == otherPlayerColor) {
+	        		statusConsole.appendText("opponent chose the same color!\n");
+	        	}
+	        	else {
+	        		Message msgObject = new Message(true, Message.Tyyppi.READY);
+	        		msgObject.setSender(this.toString());
+	        		mesh.broadcast(msgObject);
+		        	statusConsole.appendText("game started!\n");
+					chooseColor1.setVisible(false);
+					chooseColor2.setVisible(false);
+					randomColor.setVisible(false);
+	        	}
+	        }
+	        else {
+	        	Message msgObject = new Message(playerColor, Message.Tyyppi.MSG);
+		        msgObject.setSender(this.toString());
+		        System.out.println("sending ready confirmation for "+playerColor);
+		        statusConsole.appendText("you're ready!\n");
+		        mesh.broadcast(msgObject);
+		        chooseColor1.setVisible(false);
+				chooseColor2.setVisible(false);
+				randomColor.setVisible(false);
+	        }
+			
+
+			
+		});
+		
+		
+		resetGame.setOnAction(e -> {
+			chooseColor1.setVisible(true);
+			chooseColor2.setVisible(true);
+			randomColor.setVisible(true);
+			
+			window2.show();
+			
+		});
+		
 		reset.setOnAction(e -> {
 
 			if(legalMovesObs.size() > 0) {
@@ -409,9 +546,13 @@ public class App2 extends Application {
 			redraw(grid);
 		});
 		
+		//when 'end turn' is pressed, advance turn + send move forward
 		endTurn.setOnAction(e -> {
-			setTurn(moveSource,moveTarget,markTarget,
-					attackSource, attackTarget, defenderSource, defendTarget);
+			if(freePlay || (playerColor == turn.get())) {
+				setTurn(moveSource[1],moveSource[2], moveTarget[0], moveTarget[1], markTarget[0], markTarget[1],
+						attackSource[1], attackSource[2], attackTarget[0], attackTarget[1]);
+				sendMove(move);
+			}
 		});
 		
 		resign.setOnAction(e -> {
@@ -419,6 +560,9 @@ public class App2 extends Application {
 		});
 		
 		exit.setOnAction(e -> {
+			if(mesh != null) {
+				mesh.close();
+			}
 			Platform.exit();
 		});
 		
@@ -468,6 +612,44 @@ public class App2 extends Application {
 		
 	}
 	
+	
+	private void temp1() {
+		turn.addListener((observableValue,oldValue,newValue)-> {
+					
+					//System.out.println((newValue.intValue() == 1 ? "Black" : "Red")+ " turn started");
+					
+					if(newValue.intValue() == 1) {
+						p1counters.set(p1counters.get() + p1countersPerTurn.get());
+					}
+					else {
+						p2counters.set(p2counters.get() + p2countersPerTurn.get());
+					}
+					
+					savePos(board);
+					
+				});
+	
+	}
+	
+	public void confirm(int mode, int data) {
+		if(mode == 1) {
+			statusConsole.appendText("other player is ready...\n");
+			otherPlayerColor = data;
+			otherPlayerReady = true;
+		}
+		else if(mode == 2 && data == 1) {
+			statusConsole.appendText("game started!\n");
+			console.appendText("\nTurn 1.\nBlack");
+		}
+	}
+	
+	
+	public void setColor(int color) {
+		statusConsole.appendText(color == 1 ? "black" : "red" + "rolled!\n");
+		playerColor = color;
+		otherPlayerColor = color == 1 ? 2 : 1;
+	}
+	
 	/*
 	 * save current position for reset() method
 	 */
@@ -491,7 +673,27 @@ public class App2 extends Application {
 		p2counters.set(tempCounters[2]);
 		p2countersPerTurn.set(tempCounters[3]);
 		moved = false;
+		playerColor = -1;
+		otherPlayerColor = -2;
 	}
+	
+	/*
+		Reset board, counter stats to initial positions
+	 */
+	
+	private void resetWholeGame() {
+		initBoard(grid);
+		p1counters.set(startCounters);
+		p1countersPerTurn.set(startIncome);
+		p2counters.set(startCounters);
+		p2countersPerTurn.set(startIncome);
+		turn.set(1);
+		turnNumber.set(1);
+		halfTurns.set(1);
+		otherPlayerReady = false;
+		console.clear();
+	}
+	
 	
 	/*
 	 * resign game
@@ -508,69 +710,101 @@ public class App2 extends Application {
 		
 	}
 	
-	
 	/*
-	 * get starting position
+	 * Load game
 	 */
 	
-	private GridPane initBoard(GridPane grid) {
+	private void loadGame() {
 		
-		//id, type, color, x, y, char, counters, hp, ac, dc, mc
+	}
+	
+	
+	/*
+	 * Save game
+	 */
+	
+	private void saveGame() {
+		
+	}
+	
+	
+	public void handleMessage(Message msg) {
+		int[] move = (int[])msg.getPayload();
+		System.out.println("received move at board: "+Arrays.toString(move));
 
-		board[0][0] = new int[] {1,2,2,0,0,102,swordsmanValue,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC};
-		board[0][1] = new int[] {2,3,2,0,1,118,vanguardValue,8, vanguardMaxAC, vanguardMaxDC, vanguardMC};
-		board[0][2] = new int[] {3,7,2,0,2,115,spearmanValue,3, spearmanMaxAC, spearmanMaxDC, spearmanMC};
-		board[0][3] = new int[] {4,5,2,0,3,114,princeValue,5, princeMaxAC, princeMaxDC, princeMC};
-		board[0][4] = new int[] {5,6,2,0,4,103,guardianValue,12, guardianMaxAC, guardianMaxDC, guardianMC};
-		board[0][5] = new int[] {6,8,2,0,5,107,generalValue,6, generalMaxAC, generalMaxDC, generalMC};
-		board[0][6] = new int[] {7,6,2,0,6,103,guardianValue,12, guardianMaxAC, guardianMaxDC, guardianMC};
-		board[0][7] = new int[] {8,5,2,0,7,114,princeValue,5, princeMaxAC, princeMaxDC, princeMC};
-		board[0][8] = new int[] {9,7,2,0,8,115,spearmanValue,3, spearmanMaxAC, spearmanMaxDC, spearmanMC};
-		board[0][9] = new int[] {10,3,2,0,9,118,vanguardValue,8, vanguardMaxAC, vanguardMaxDC, vanguardMC};
-		board[0][10] = new int[] {11,2,2,0,10,102,swordsmanValue,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC};
-		board[0][11] = null;
+		int sX = move[0];
+		int sY = move[1];
+		int tX = move[2];
+		int tY = move[3];
+		int markX = move[4];
+		int markY = move[5];
+		int markColor = move[6];
+		int attSX = move[7];
+		int attSY = move[8];
+		int attTX = move[9];
+		int attTY = move[10];
+//		int defendersChar = 0;
+//		int defSX = 0;
+//		int defSY = 0;
+//		int defTX=0;
+//		int defTY=0;
 		
-		board[10][0] = new int[] {34,2,1,10,0,102,swordsmanValue,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC};
-		board[10][1] = new int[] {35,3,1,10,1,118,vanguardValue,8, vanguardMaxAC, vanguardMaxDC, vanguardMC};
-		board[10][2] = new int[] {36,7,1,10,2,115,spearmanValue,3, spearmanMaxAC, spearmanMaxDC, spearmanMC};
-		board[10][3] = new int[] {37,5,1,10,3,114,princeValue,5, princeMaxAC, princeMaxDC, princeMC};
-		board[10][4] = new int[] {38,6,1,10,4,103,guardianValue,12, guardianMaxAC, guardianMaxDC, guardianMC};
-		board[10][5] = new int[] {39,8,1,10,5,107,generalValue,6, generalMaxAC, generalMaxDC, generalMC};
-		board[10][6] = new int[] {40,6,1,10,6,103,guardianValue,12, guardianMaxAC, guardianMaxDC, guardianMC};
-		board[10][7] = new int[] {41,5,1,10,7,114,princeValue,5, princeMaxAC, princeMaxDC, princeMC};
-		board[10][8] = new int[] {42,7,1,10,8,115,spearmanValue,3, spearmanMaxAC, spearmanMaxDC, spearmanMC};
-		board[10][9] = new int[] {43,3,1,10,9,118,vanguardValue,8, vanguardMaxAC, vanguardMaxDC, vanguardMC};
-		board[10][10] = new int[]{44,2,1,10,10,102,swordsmanValue,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC};
-		board[11][11] = null;
+		//move = new int[] {sX,sY,tX,tY,markX,markY,markColor,attSX,attSY,attTX,attTY};
 		
+//		setTurn(new int[] {board[sX][sY][0],sX,sY},new int[] {tX,tY}, new int[] {markX,markY},
+//				new int[] {board[attSX][attSY][0],attSX,attSY}, new int[] {attTX,attTY}, null, null);
 		
-		
-		for(int i = 0; i<11; i++) {
-			if(i == 3 || i == 7) {
-				board[1][i] = new int[] {12+i,4,2,1,i,104,scytheValue,6,scytheMaxAC,scytheMaxDC,scytheMC};
-				board[9][i] = new int[] {23+i,4,1,9,i,104,scytheValue,6,scytheMaxAC,scytheMaxDC,scytheMC};
-				continue;
-			}
-			
-			board[1][i] = new int[] {12+i,1,2,1,i,112,pawnValue,1,pawnMaxAC, pawnMaxDC, pawnMC};
-			board[9][i] = new int[] {23+i,1,1,9,i,112,pawnValue,1,pawnMaxAC, pawnMaxDC, pawnMC};
-			
+		if (tX != -1) {
+			makeMove(sX, sY, tX, tY, grid);
 		}
 		
-		for(int i = 0; i<11; i++) {
-			for(int j = 2; j<9; j++) {
-				board[j][i] = null;
-			}
+		if (markX != -1) {
+			placeMark(markX,markY,markColor,grid);
 		}
 		
+		if (attTX != -1) {
+			attack(attTX,attTY);
+		}
 		
-		tempCounters = new int[] {1,0,1,0};
-		arrayCopy(board,tempBoard);
+		//advance turn after opponents move was made
+		setTurn(sX,sY,tX,tY,markX,markY,attSX,attSY,attTX,attTY);
+
 		
-		return redraw(grid);
+		redraw(grid);
 		
 		
 	}
+	
+	
+
+	
+	/*
+	 * Called when ending turn to send the move to other player by socket connection
+	 */
+	
+	public void sendMove(int[] move) {
+		
+		if(mesh == null) {
+			return;
+		}
+
+        Message msgObject = new Message(move, Message.Tyyppi.MOVE);
+        msgObject.setSender(this.toString());
+        System.out.println("sending move(App2): " + Arrays.toString(move));
+        mesh.broadcast(msgObject);
+		
+	}
+	
+	
+	
+	/*
+	 * Convert board b into save format
+	 */
+	
+	public void saveState(int[][][] b) {
+		
+	}
+	
 	
 	private GridPane redraw(GridPane grid) {
 		int i;
@@ -671,8 +905,19 @@ public class App2 extends Application {
 					}
 					
 					
-					//a == null OR a.color = turn, a not null AND a.color == turn, a == null,
-					if(board[t][t2] == null || board[t][t2][2] == turn.get() || (board[t][t2][2] != turn.get() && attackMode)) {
+					//a == null OR (freeplay AND selected turn-colored piece) OR (online AND selected own piece) OR
+					//freeplay AND selected opponents-turn-colored piece AND attackmode OR
+					//online AND selected opponents piece AND attackmode
+					
+					/*
+					 * a == null ||
+					 * (freePlay && ((a.color == turn.get()) || attackMode)) ||
+					 * a.color == playerColor || attackMode
+					 */
+					if(board[t][t2] == null || (freePlay && board[t][t2][2] == turn.get()) ||
+							(!freePlay && board[t][t2][2] == playerColor) ||
+							(freePlay && board[t][t2][2] != turn.get() && attackMode) ||
+							(!freePlay && board[t][t2][2] != playerColor && attackMode)) {
 						System.out.println("&&");
 						System.out.println("t "+t+" t2 "+t2);
 						
@@ -711,7 +956,7 @@ public class App2 extends Application {
 									(turn.get()==2 && p2counters.get() >= p2countersPerTurn.get())) 
 									&& board[t][t2] == null) {
 									
-									placeMark(t,t2,grid);
+									placeMark(t,t2,turn.get(),grid);
 									markTarget = new int[] {temp,temp2};
 									
 								}
@@ -731,16 +976,16 @@ public class App2 extends Application {
 									attackTarget = new int[] {temp,temp2};
 								}
 							}
-							else if(defenseMode) {
-								parseId(startPane.getId(),2);
-								
-								if((turn.get()==1 && p1counters.get() >= board[defenderSource[1]][defenderSource[2]][9]) ||
-										(turn.get()==2 && p2counters.get() > board[defenderSource[1]][defenderSource[2]][9])) {
-									defend(temp,temp2,piece);
-									defendTarget = new int[] {temp,temp2};
-								}
-								
-							}
+//							else if(defenseMode) {
+//								parseId(startPane.getId(),2);
+//								
+//								if((turn.get()==1 && p1counters.get() >= board[defenderSource[1]][defenderSource[2]][9]) ||
+//										(turn.get()==2 && p2counters.get() > board[defenderSource[1]][defenderSource[2]][9])) {
+//									defend(temp,temp2,piece);
+//									defendTarget = new int[] {temp,temp2};
+//								}
+//								
+//							}
 							awaitingSquare = false;
 							
 						}
@@ -798,7 +1043,7 @@ public class App2 extends Application {
 							((ImageView) ((Pane) event.getGestureSource()).getChildren().get(1)).setImage(null);
 							event.setDropCompleted(true);
 							
-							makeMove(temp,temp2,grid);
+							makeMove(moveSource[1], moveSource[2], temp,temp2,grid);
 							moveTarget = new int[] {temp,temp2};
 							
 						}
@@ -899,7 +1144,7 @@ public class App2 extends Application {
 			attackSource = new int[3];
 		}
 		else if(mode == 2) {
-			defenderSource = new int[3];
+			//defenderSource = new int[3];
 		}
 		
 		
@@ -917,7 +1162,7 @@ public class App2 extends Application {
 					attackSource[j] = Integer.parseInt(temp);
 				}
 				else if(mode == 2) {
-					defenderSource[j] = Integer.parseInt(temp);
+					//defenderSource[j] = Integer.parseInt(temp);
 				}
 				
 				temp = "";
@@ -934,10 +1179,10 @@ public class App2 extends Application {
 	 * move a piece to (tX,tY) and update board with redraw()
 	 */
 	
-	private void makeMove(int tX, int tY,GridPane grid) {
+	private void makeMove(int sX, int sY, int tX, int tY,GridPane grid) {
 		
 
-		int[] piece = board[moveSource[1]][moveSource[2]];
+		int[] piece = board[sX][sY];
 		
 		//subtract move cost
 		if(piece[2] == 1) {
@@ -948,14 +1193,22 @@ public class App2 extends Application {
 		}
 
 		//make the move from start coordinates parsed from start Pane id string
-		board[tX][tY] = board[moveSource[1]][moveSource[2]];
-		board[moveSource[1]][moveSource[2]] = null;
+		board[tX][tY] = piece;
+		board[sX][sY] = null;
 		redraw(grid);
 
 		legalMoves = null;
 		legalRange = null;
-		list.clear();
-		list2.clear();
+		
+		if(list != null) {
+			list.clear();
+		}
+		
+		if(list2 != null) {
+			list2.clear();
+		}
+		
+		
 		getLegalSquares();
 		getRange();
 		moved = true;
@@ -965,19 +1218,19 @@ public class App2 extends Application {
 	 * Place mark at (x,y) and update board with redraw()
 	 */
 	
-	private void placeMark(int x, int y,GridPane grid) {
+	private void placeMark(int x, int y, int color, GridPane grid) {
 		int markChar = 109;
 		
 		if(turn.get() == 1) {
-			p1counters.set(p1counters.get()-p1countersPerTurn.get());
+			p1counters.set(p1counters.get() - p1countersPerTurn.get());
 			p1countersPerTurn.set(p1countersPerTurn.get()+1);
 		}
 		else {
-			p2counters.set(p2counters.get()-p2countersPerTurn.get());
+			p2counters.set(p2counters.get() - p2countersPerTurn.get());
 			p2countersPerTurn.set(p2countersPerTurn.get()+1);
 		}
 
-		board[x][y] = new int[] {markId,-1,turn.get(),x,y,markChar,1};
+		board[x][y] = new int[] {markId,-1,color,x,y,markChar,1};
 		redraw(grid);
 		markId--;
 		
@@ -994,10 +1247,17 @@ public class App2 extends Application {
 		//increment counters by piece value
 		if(board[x][y][2]==1) {
 			p2counters.set(p2counters.get()+board[x][y][6]);
+			if(board[x][y][0] < 0) {
+				p1countersPerTurn.set(p1countersPerTurn.get()-1);
+			}
 		}
 		else {
 			p1counters.set(p1counters.get()+board[x][y][6]);
+			if(board[x][y][0] < 0) {
+				p2countersPerTurn.set(p2countersPerTurn.get()-1);
+			}
 		}
+		
 		board[x][y] = null;
 		redraw(grid);
 	}
@@ -1066,64 +1326,67 @@ public class App2 extends Application {
 	 * handle printing move data into console after turn changes
 	 */
 	
-	private void setTurn(int[] movSource, int[] movTarget, int[] markTgt, 
-			int[] attSource, int[] attTarget, int[] defSource, int[] defTarget) {
+	private void setTurn(int sX, int sY, int tX, int tY, int markX, int markY, int attSX, int attSY, int attTX, int attTY) {
 		
-		int pieceChar = 0;
-		int sX = 0;
-		int sY = 0;
-		int tX = 0;
-		int tY = 0;
-		int markX = 0;
-		int markY = 0;
-		int attackersChar = 0;
-		int attSX = 0; 
-		int attSY = 0;
-		int attTX = 0;
-		int attTY = 0;
-		int defendersChar = 0;
-		int defSX = 0;
-		int defSY = 0;
-		int defTX=0;
-		int defTY=0;
-		
-		if(movSource != null) {
-			pieceChar = movSource[0];
-			sX = movSource[1];
-			sY = movSource[2];
-		}
-		
-		if(movTarget != null) {
-			tX = movTarget[0];
-			tY = movTarget[1];
-		}
-		
-		if(markTgt != null) {
-			markX = markTgt[0];
-			markY = markTgt[1];
-		}
-		
-		if(attSource != null) {
-			attackersChar = attSource[0];
-			attSX = attSource[1];
-			attSY = attSource[2];
-			
-		}
-		if(attTarget != null) {
-			attTX = attTarget[0];
-			attTY = attTarget[1];
-		}
-		if(defSource != null) {
-			defendersChar = defSource[0];
-			defSX = defSource[1];
-			defSY = defSource[2];
-			
-		}
-		if(defTarget != null) {
-			attTX = defTarget[0];
-			attTY = defTarget[1];
-		}
+//		int pieceChar = 0;
+//		int sX = 0;
+//		int sY = 0;
+//		int tX = 0;
+//		int tY = 0;
+//		int markX = 0;
+//		int markY = 0;
+//		int attackersChar = 0;
+//		int attSX = -1; 
+//		int attSY = -1;
+//		int attTX = -1;
+//		int attTY = -1;
+//		int defendersChar = 0;
+//		int defSX = 0;
+//		int defSY = 0;
+//		int defTX=0;
+//		int defTY=0;
+//		
+//		int[] move;
+//		
+//		if(movSource != null) {
+//			pieceChar = movSource[0];
+//			sX = movSource[1];
+//			sY = movSource[2];
+//		}
+//		
+//		if(movTarget != null) {
+//			tX = movTarget[0];
+//			tY = movTarget[1];
+//		}
+//		
+//		if(markTgt != null) {
+//			markX = markTgt[0];
+//			markY = markTgt[1];
+//		}
+//		
+//		if(attSource != null) {
+//			attackersChar = attSource[0];
+//			attSX = attSource[1];
+//			attSY = attSource[2];
+//			
+//		}
+//		if(attTarget != null) {
+//			attTX = attTarget[0];
+//			attTY = attTarget[1];
+//		}
+//		if(defSource != null) {
+//			defendersChar = defSource[0];
+//			defSX = defSource[1];
+//			defSY = defSource[2];
+//			
+//		}
+//		if(defTarget != null) {
+//			attTX = defTarget[0];
+//			attTY = defTarget[1];
+//		}
 
+		move = new int[] {sX,sY,tX,tY,markX,markY,turn.get(),attSX,attSY,attTX,attTY};
+		
 		if(halfTurns.get() % 2 == 0) {		
 			turnNumber.set(turnNumber.get()+1);
 		}
@@ -1133,24 +1396,25 @@ public class App2 extends Application {
 		halfTurns.set(halfTurns.getValue()+1);
 
 
-		if(moveSource != null) {
-			sb.append(" - "+(char)pieceChar+charConv(sY)+(sX+1)+" -> "+charConv(tY)+(tX+1)+"\n");
-		}
-		if(markTarget != null) {
-			sb.append("mark placed at "+charConv(markY)+(markX+1)+"\n");
-		}
-		if(attSource != null) {
-			sb.append("attacked "+charConv(attTY)+(attTX+1)+" by "+(char)attackersChar+" at "+charConv(attSY)+(attSX+1)+"\n");
-		}
-		if(defSource != null) {
-			sb.append("defended "+charConv(defTY)+(defTX+1)+" by "+(char)defendersChar+" at "+charConv(defSY)+(defSX+1)+"\n");
-		}
+//		if(tX != -1) {
+//			System.out.println("sX "+sX+" sY "+sY);
+//			sb.append(" - "+(char)board[tX][tY][5]+charConv(sY)+(sX+1)+" -> "+charConv(tY)+(tX+1)+"\n");
+//		}
+//		if(markX != -1) {
+//			sb.append("mark placed at "+charConv(markY)+(markX+1)+"\n");
+//		}
+//		if(attTX != -1) {
+//			sb.append("attacked "+charConv(attTY)+(attTX+1)+" by "+(char)board[attSX][attSY][5]+" at "+charConv(attSY)+(attSX+1)+"\n");
+//		}
+//		if(defSource != null) {
+//			sb.append("defended "+charConv(defTY)+(defTX+1)+" by "+(char)defendersChar+" at "+charConv(defSY)+(defSX+1)+"\n");
+//		}
 		
 		if(!gameRunning) {
 			sb.append((turn.get()-1 == 1 ? " Black " : "Red ")+"won by area capture");
 		}
 		else {
-			sb.append("\n"+(turn.get()==1 ? "Black" : "Red"));
+			sb.append("\n"+(turn.get() == 1 ? "Black" : "Red"));
 		}
 		
 		
@@ -1160,22 +1424,26 @@ public class App2 extends Application {
 		
 		System.out.println("current turn "+turn+", turn no: "+turnNumber.get()+" halfturns: "+halfTurns.get()+"\n");
 
-		moveSource = null;
-		moveTarget = null;
-		markTarget = null;
-		attackSource = null;
-		attackTarget = null;
-		defenderSource = null;
-		defendTarget = null;
+		moveSource =  new int[] {-1, -1,-1};
+		moveTarget  = new int[] {-1, -1};
+		markTarget  = new int[] {-1, -1};
+		attackSource  = new int[] {-1, -1,-1};
+		attackTarget = new int[] {-1, -1};
+//		defenderSource = null;
+//		defendTarget = null;
 		moved = false;
 		
 		legalMoves = null;
 		legalRange = null;
-		list.clear();
-		list2.clear();
+		if (list != null) 
+			list.clear();
+		if (list2 != null)
+			list2.clear();
 		getRange();
 		getLegalSquares();
 
+		
+		
 	}
 	
 	/*
@@ -1313,10 +1581,74 @@ public class App2 extends Application {
 	 */
 	
 	private void getLegalSquares() {
-		System.out.println("changed"+list.size());
+		//System.out.println("changed"+list.size());
 		if(list != null) {
 			legalMovesObs.addAll(list);
 		}
+		
+	}
+	
+	
+	/*
+	 * get starting position
+	 */
+	
+	private GridPane initBoard(GridPane grid) {
+		
+		//id, type, color, x, y, char, counters, hp, ac, dc, mc
+
+		board[0][0] = new int[] {1,2,2,0,0,102,swordsmanValue,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC};
+		board[0][1] = new int[] {2,3,2,0,1,118,vanguardValue,8, vanguardMaxAC, vanguardMaxDC, vanguardMC};
+		board[0][2] = new int[] {3,7,2,0,2,115,spearmanValue,3, spearmanMaxAC, spearmanMaxDC, spearmanMC};
+		board[0][3] = new int[] {4,5,2,0,3,114,princeValue,5, princeMaxAC, princeMaxDC, princeMC};
+		board[0][4] = new int[] {5,6,2,0,4,103,guardianValue,12, guardianMaxAC, guardianMaxDC, guardianMC};
+		board[0][5] = new int[] {6,8,2,0,5,107,generalValue,6, generalMaxAC, generalMaxDC, generalMC};
+		board[0][6] = new int[] {7,6,2,0,6,103,guardianValue,12, guardianMaxAC, guardianMaxDC, guardianMC};
+		board[0][7] = new int[] {8,5,2,0,7,114,princeValue,5, princeMaxAC, princeMaxDC, princeMC};
+		board[0][8] = new int[] {9,7,2,0,8,115,spearmanValue,3, spearmanMaxAC, spearmanMaxDC, spearmanMC};
+		board[0][9] = new int[] {10,3,2,0,9,118,vanguardValue,8, vanguardMaxAC, vanguardMaxDC, vanguardMC};
+		board[0][10] = new int[] {11,2,2,0,10,102,swordsmanValue,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC};
+		board[0][11] = null;
+		
+		board[10][0] = new int[] {34,2,1,10,0,102,swordsmanValue,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC};
+		board[10][1] = new int[] {35,3,1,10,1,118,vanguardValue,8, vanguardMaxAC, vanguardMaxDC, vanguardMC};
+		board[10][2] = new int[] {36,7,1,10,2,115,spearmanValue,3, spearmanMaxAC, spearmanMaxDC, spearmanMC};
+		board[10][3] = new int[] {37,5,1,10,3,114,princeValue,5, princeMaxAC, princeMaxDC, princeMC};
+		board[10][4] = new int[] {38,6,1,10,4,103,guardianValue,12, guardianMaxAC, guardianMaxDC, guardianMC};
+		board[10][5] = new int[] {39,8,1,10,5,107,generalValue,6, generalMaxAC, generalMaxDC, generalMC};
+		board[10][6] = new int[] {40,6,1,10,6,103,guardianValue,12, guardianMaxAC, guardianMaxDC, guardianMC};
+		board[10][7] = new int[] {41,5,1,10,7,114,princeValue,5, princeMaxAC, princeMaxDC, princeMC};
+		board[10][8] = new int[] {42,7,1,10,8,115,spearmanValue,3, spearmanMaxAC, spearmanMaxDC, spearmanMC};
+		board[10][9] = new int[] {43,3,1,10,9,118,vanguardValue,8, vanguardMaxAC, vanguardMaxDC, vanguardMC};
+		board[10][10] = new int[]{44,2,1,10,10,102,swordsmanValue,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC};
+		board[11][11] = null;
+		
+		
+		
+		for(int i = 0; i<11; i++) {
+			if(i == 3 || i == 7) {
+				board[1][i] = new int[] {12+i,4,2,1,i,104,scytheValue,6,scytheMaxAC,scytheMaxDC,scytheMC};
+				board[9][i] = new int[] {23+i,4,1,9,i,104,scytheValue,6,scytheMaxAC,scytheMaxDC,scytheMC};
+				continue;
+			}
+			
+			board[1][i] = new int[] {12+i,1,2,1,i,112,pawnValue,1,pawnMaxAC, pawnMaxDC, pawnMC};
+			board[9][i] = new int[] {23+i,1,1,9,i,112,pawnValue,1,pawnMaxAC, pawnMaxDC, pawnMC};
+			
+		}
+		
+		for(int i = 0; i<11; i++) {
+			for(int j = 2; j<9; j++) {
+				board[j][i] = null;
+			}
+		}
+		
+		
+		tempCounters = new int[] {1,0,1,0};
+		arrayCopy(board,tempBoard);
+		
+		return redraw(grid);
+		
 		
 	}
 	
