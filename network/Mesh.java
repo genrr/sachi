@@ -47,7 +47,10 @@ public class Mesh extends Thread {
 
             ss = new ServerSocket(PORT);
             name = "localhost" + ":" + ss.getLocalPort();
-
+            
+            System.out.println("server socket local port: "+ss.getLocalPort());
+            System.out.println("host address: "+ss.getInetAddress().getHostAddress());
+            
             while (!Thread.currentThread().isInterrupted()) {
                 Socket cs = ss.accept();
                 App2.statusConsole.appendText("Connection from " + cs.getInetAddress()  + " port " + cs.getPort()+"\n");

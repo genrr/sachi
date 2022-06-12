@@ -20,6 +20,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.ClipboardContent;
@@ -185,6 +186,28 @@ public class App2 extends Application {
 			}
 		);
 		
+		/*
+		 * Connection pop-up
+		 */
+		
+		Stage window3 = new Stage();
+		HBox cBoxCont = new HBox();
+		Scene connectBox = new Scene(cBoxCont,600,260);
+		TextField addressField = new TextField();
+		Button submit = new Button("submit");
+		cBoxCont.getChildren().addAll(addressField, submit);
+		window3.setScene(connectBox);
+		
+		submit.setOnAction(e -> {
+			try {
+	            String address = addressField.getText();
+	            statusConsole.appendText("Connecting to server at "+address+":2000\n");
+	            mesh.connect(address, 2000);
+	        } catch(Exception e1) {
+	            e1.printStackTrace();
+	        }
+			window3.close();
+		});
 		
 		
 		//laying out all the elements
@@ -444,14 +467,10 @@ public class App2 extends Application {
 			mesh = new Mesh(2001,this);
 			statusConsole.appendText("client started\n");
 			mesh.start();
-			try {
-	            String address = "localhost";
-	            statusConsole.appendText("Connecting to server at "+address+":2000\n");
-	            // ...or at least somebody should be
-	            mesh.connect(address, 2000);
-	        } catch(Exception e1) {
-	            e1.printStackTrace();
-	        }
+			
+			window3.show();
+			
+			
 			chooseColor1.setVisible(true);
 			chooseColor2.setVisible(true);
 			randomColor.setVisible(true);
@@ -688,6 +707,7 @@ public class App2 extends Application {
 		p2counters.set(startCounters);
 		p2countersPerTurn.set(startIncome);
 		turn.set(1);
+		sb.delete(0, sb.length());
 		turnNumber.set(1);
 		halfTurns.set(1);
 		otherPlayerReady = false;
@@ -960,6 +980,10 @@ public class App2 extends Application {
 									markTarget = new int[] {temp,temp2};
 									
 								}
+								else
+								{
+									statusConsole.appendText("not enough counters or target square not empty!\n");
+								}
 								
 							}
 							else if(attackMode){
@@ -974,6 +998,10 @@ public class App2 extends Application {
 									attack(temp,temp2);
 									((ImageView) ((Pane) sqArray[temp][temp2]).getChildren().get(1)).setImage(null);
 									attackTarget = new int[] {temp,temp2};
+								}
+								else
+								{
+									statusConsole.appendText("not enough counters or some piece blocking the attack!\n");
 								}
 							}
 //							else if(defenseMode) {
@@ -1046,6 +1074,10 @@ public class App2 extends Application {
 							makeMove(moveSource[1], moveSource[2], temp,temp2,grid);
 							moveTarget = new int[] {temp,temp2};
 							
+						}
+						else
+						{
+							statusConsole.appendText("not enough counters!\n");
 						}
 						
 					}
