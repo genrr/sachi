@@ -192,6 +192,12 @@ public class Mesh extends Thread {
                     				app.confirm(2, (boolean)msg.getPayload() ? 1 : 0);
                     			});
                     		}
+                    		else if(msg.getType()==Message.Tyyppi.BANAANI) {
+                    			Platform.runLater(() -> {
+                    				System.out.println("received resignation end game for winner, put data into console");
+                    				app.resign((int)msg.getPayload());
+                    			});
+                    		}
 	                    	
                     	}
 //                    	

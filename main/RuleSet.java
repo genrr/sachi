@@ -4,6 +4,7 @@ import java.util.ArrayList;
 
 public class RuleSet {
 
+
 	/*
 	 * Returns integer specifying the result of the move:
 	 * 	0 (not valid move)
@@ -252,14 +253,14 @@ public class RuleSet {
 		// tempX = 1+sign(2-1) = 2, tempY = 1+sign(2-1) = 2, (2,2)
 		
 		
-		while(tempX != tx && tempY != ty) {
+		while(tempX != tx && tempY != ty && Math.max(Math.abs(tempY-ty),Math.abs(tempX-tx)) != 1) {
 			tempX += Math.signum(tx-tempX);
 			tempY += Math.signum(ty-tempY);
 			
-			System.out.println(tempX+" t"+tempY);
+			System.out.println("tempX "+tempX+" tempY "+tempY);
 			
 			if(board[tempX][tempY] != null) {
-				if(def == (board[tempX][tempY][0] == -3)) {
+				//if(def == (board[tempX][tempY][0] == -3)) {
 					if(own && enemy) {
 						return true;
 					}
@@ -273,7 +274,7 @@ public class RuleSet {
 							return true;
 						}
 					}	
-				}
+				//}
 			}
 		}
 		return false;
@@ -494,6 +495,49 @@ public class RuleSet {
 		return t;
 	}
 	
+	/*
+	 * Rotates matrix(clockwise(dir = 1), or counterclockwise(dir = -1))
+	 * 
+	 */
+	
+	public static int[][] rotateMatrix(int[][] matrix, int dir)
+	{
+		//i -> j, j = 10-i
+		//(0,0) -> (0,10):  
+		//(1,1) -> (1,9): 1,9
+		//(0,10) -> (10,10)
+		
+		//counterclockwise:
+		//j -> i, i = 10 - j
+		//(0,0) -> (10,0)
+		//(1,9) -> (1,1)
+		//(4,3) -> 
+		
+		//(10 - 1) = 9
+		
+		//r[j][10-i] = matrix[i][j];
+		
+		int[][] r = new int[7][7];
+		
+		
+		for (int i = 0; i < 7; i++) {
+			for (int j = 0; j < 7; j++) {
+				if(dir == 1)
+				{
+					r[j][6 - i] = matrix[i][j];
+				}
+				else if(dir == -1)
+				{
+					r[6-j][i] = matrix[i][j];
+				}
+				
+			}
+	
+		}
+		
+		return r;
+	}
+	
 	
 	/*
 	 * Check for game-winning condition, where current player made a rectangle which 
@@ -510,7 +554,7 @@ public class RuleSet {
 		
 		ArrayList<int[]> t = new ArrayList<int[]>();
 		int[] area;
-		System.out.println("#");
+		
 		for(int j = 0; j<11; j++) {
 			for(int i = 0; i<11; i++) {
 				if(board[i][j] != null && board[i][j][0] < 0 && board[i][j][2] == turn) {
@@ -529,13 +573,13 @@ public class RuleSet {
 		
 		for(int j = 0; j<11; j++) {
 			for(int i = 0; i<11; i++) {
-				if(board[i][j] != null && board[i][j][2] != turn) {
+				if(board[i][j] != null && board[i][j][2] != turn && board[i][j][0] >= 0) {
 					for (int[] is : t) {
+						System.out.println("t area: "+is[0]+" "+is[1]+" "+is[2]+" "+is[3]);
 						
-						if(i < Math.min(is[0],is[1]) ||
-								i > Math.max(is[0],is[1]) ||
-								j < Math.min(is[2],is[3]) ||
-								j > Math.max(is[2],is[3])) {
+						if(i < Math.min(is[0],is[1]) || i > Math.max(is[0],is[1]) ||
+						   j < Math.min(is[2],is[3]) || j > Math.max(is[2],is[3])) {
+							
 							System.out.println("i "+i+" j "+j+" i_0 "+is[0]+" i_1 "+is[1]+" i_2 "+is[2]+" is_3 "+is[3]);
 							return false;
 						}
@@ -552,16 +596,16 @@ public class RuleSet {
 		
 	}
 	
-	private static int[] getArea(int startI, int startJ,int[][][] board, int turn, int initialI) {
+	public static int[] getArea(int startI, int startJ,int[][][] board, int turn, int initialI) {
 
 		int tempI = -1;
 		int tempJ = -1;
 		int j = startJ;
 
-		for(int i = startI+1; i<11; i++) {
+		for(int i = 0; i<11; i++) {
 			
 			//mark found of the current player
-			if(board[i][j] != null && board[i][j][0] < 0 && board[i][j][2] == turn) {
+			if(board[i][j] != null && board[i][j][0] < 0 && board[i][j][2] == turn && i != startI) {
 
 				System.out.println("mark 2 "+i+" "+j+" "+board[i][j][0]);
 				tempI = i;
@@ -574,7 +618,8 @@ public class RuleSet {
 
 						if(board[initialI][tempJ] != null && board[initialI][tempJ][0] < 0 && board[initialI][tempJ][2] == turn) {
 							System.out.println("mark 4 "+initialI+" "+tempJ+" "+board[initialI][tempJ][0]);
-							return new int[] {initialI,tempI,j,tempJ};
+							return new int[] {Math.min(initialI, tempI), Math.max(initialI, tempI), Math.min(j, tempJ), Math.max(j, tempJ)};
+									//0,8,10,2
 									//(0,0),(4,0),(0,3),(4,3)
 									//(x1,y1),(x2,y1),(x1,y2), (x2,y2)
 						}
