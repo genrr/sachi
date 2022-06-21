@@ -1,10 +1,19 @@
 package main;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.sql.Time;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicLongFieldUpdater;
+import java.time.*;
 
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -21,6 +30,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
@@ -33,7 +43,6 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.input.TransferMode;
-import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -41,7 +50,6 @@ import javafx.scene.layout.Pane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
-import javafx.scene.text.TextAlignment;
 import javafx.stage.Stage;
 import network.Mesh;
 import network.Message;
@@ -50,12 +58,16 @@ public class App2 extends Application {
 	
 	public static int[][][] board = new int[12][12][];
 	public static int[][][] tempBoard = new int[12][12][];
+	ArrayList<int[][][]> boardList = new ArrayList<int[][][]>();
+	private Mesh mesh;
+	private int[] move;
 	
 	public static int plies = 2;
 	static int h = 0;
 	
 	public static SimpleIntegerProperty turn = new SimpleIntegerProperty(1); //1 for black, 2 for red
 	private static int markId = -1;
+	private static int pieceIdCap = 45;
 	public static int startCounters = 1;
 	public static int startIncome = 0;
 	public static int playerColor = -1;
@@ -104,6 +116,12 @@ public class App2 extends Application {
 	private static int[] markTarget = new int[] {-1, -1};
 	private static int resignedPieceType = 0;
 	private static int[] resignedPieceLoc = new int[] {-1,-1};
+	private static int[] generalPromotionLoc = new int[] {-1,-1};
+	private static int[] queensMarkTarget = new int[] {-1,-1};
+	private static boolean hasQueensMarkOrQueen = false;
+	private int queenAreaLvl;
+	private static int[] rotatedPieceLoc = new int[] {-1,-1};
+	private static int rotationAngle;
 
 	private static Pane[][] sqArray = new Pane[12][12];
 	private static GridPane grid = new GridPane();
@@ -113,51 +131,16 @@ public class App2 extends Application {
 	private static Color gridColor1 = new Color(85.0/255,80.0/255,79.0/255,(256-87.0)/255);
 	private static Color gridColor2 = new Color(1,1,1,1);
 
-	private static int pawnMaxAC = 1;
-	private static int pawnMaxDC = 1;
-	private static int pawnMC = 0;
-	private static int pawnValue = 1;
-	
-	private static int swordsmanMaxAC = 4;
-	private static int swordsmanMaxDC = 2;
-	private static int swordsmanMC = 1;
-	private static int swordsmanValue = 4;
-	
-	private static int vanguardMaxAC = 3;
-	private static int vanguardMaxDC = 5;
-	private static int vanguardMC = 2;
-	private static int vanguardValue = 6;
-	
-	private static int scytheMaxAC = 1;
-	private static int scytheMaxDC = 3;
-	private static int scytheMC = 1;
-	private static int scytheValue = 5;
-	
-	private static int princeMaxAC = 4;
-	private static int princeMaxDC = 4;
-	private static int princeMC = 2;
-	private static int princeValue = 6;
-	
-	private static int guardianMaxAC = 4;
-	private static int guardianMaxDC = 9;
-	private static int guardianMC = 2;
-	private static int guardianValue = 9;
-	
-	private static int spearmanMaxAC = 2;
-	private static int spearmanMaxDC = 3;
-	private static int spearmanMC = 2;
-	private static int spearmanValue = 5;
-	
-	private static int generalMaxAC = 5;
-	private static int generalMaxDC = 0;
-	private static int generalMC = 3;
-	private static int generalValue = 15;
-	
-	private static int queenMaxAC = 5;
-	private static int queenMaxDC = 6;
-	private static int queenMC = 3;
-	private static int queenValue = 32;
-	
+	int soldier = 1;
+	int swordsman = 2;
+	int vanguard = 3;
+	int scythe = 4;
+	int prince = 5;
+	int guardian = 6;
+	int spearman = 7;
+	int general = 8;
+	int queen = 9;
+
 	HBox pieceMenu;
 	Button rotateClockwise = new Button("rotate clockwise");
 	Button rotateCounterClockwise = new Button("rotate counterclockwise");
@@ -165,16 +148,10 @@ public class App2 extends Application {
 	Button placeQueensMark = new Button("place Queens mark");
 	Button placeScarletMark = new Button("place Scarlet mark");
 	
-
-	private Mesh mesh;
-	private int[] move;
-	private static int[] queensMarkTarget = new int[] {-1,-1};
-	private static boolean hasPlacedQueensMark = false;
-	private static int[] rotatedPieceLoc = new int[] {-1,-1};
-	private static int rotationAngle;
-	
-
+	private boolean loading = false;
+	private boolean saving = false;
 	private static Random rng = new Random();
+	
 	/*
 	 * GUI element initialization
 	 * GUI event handlers
@@ -184,41 +161,17 @@ public class App2 extends Application {
 	public void start(Stage window) throws Exception {
 		System.out.println("this App2 ref: "+this);
 		
-
 		BorderPane main = new BorderPane();
-		Scene scene = new Scene(main,1080,960);
+		Scene scene = new Scene(main,1250,960);
 		window.setScene(scene);
 		window.show();
 		
-		/*
-		 * notification Scene
-		 */
-		Stage window2 = new Stage();
-		BorderPane nPanel = new BorderPane();
-		
-		Label question = new Label("Save game?");
-		Button affBtn = new Button("Yes");
-		Button decBtn = new Button("No");
-		BorderPane.setMargin(affBtn, new Insets(50));
-		BorderPane.setMargin(decBtn, new Insets(50));
-		BorderPane.setMargin(question, new Insets(10));
-		nPanel.setLeft(affBtn);
-		nPanel.setRight(decBtn);
-		nPanel.setTop(question);
-		BorderPane.setAlignment(question, Pos.CENTER);
-		Scene notifyScreen = new Scene(nPanel,320,150);
-		window2.setScene(notifyScreen);
-		affBtn.setOnAction(e -> {
-				saveGame();
-				window2.hide();
-				resetWholeGame();
+		window.setOnCloseRequest(e -> {
+			if(mesh != null) {
+				mesh.close();
 			}
-		);
-		decBtn.setOnAction(e -> {
-				window2.hide();
-				resetWholeGame();
-			}
-		);
+			Platform.exit();
+		});
 		
 		/*
 		 * Connection pop-up
@@ -232,6 +185,27 @@ public class App2 extends Application {
 		cBoxCont.getChildren().addAll(addressField, submit);
 		window3.setScene(connectBox);
 		
+		connectBox.addEventHandler(KeyEvent.KEY_PRESSED, key -> {
+			if(key.getCode() == KeyCode.ESCAPE)
+			{
+				window3.close();
+			}
+		});
+		
+		connectBox.addEventHandler(KeyEvent.KEY_PRESSED, key -> {
+			if(key.getCode() == KeyCode.ENTER)
+			{
+				try {
+		            String address = addressField.getText();
+		            statusConsole.appendText("Connecting to server at "+address+":2000\n");
+		            mesh.connect(address, 2000);
+		        } catch(Exception e1) {
+		            e1.printStackTrace();
+		        }
+				window3.close();
+			}
+		});
+		
 		submit.setOnAction(e -> {
 			try {
 	            String address = addressField.getText();
@@ -242,7 +216,127 @@ public class App2 extends Application {
 	        }
 			window3.close();
 		});
+
+
+		/*
+		 * save/load dialog
+		 */
 		
+		Stage window4 = new Stage();
+		ScrollPane saveGamePane = new ScrollPane();
+		VBox cont = new VBox();
+		Pane[] slots = new Pane[15];
+		FileReader freader;
+		
+		for(int i = 0; i<15; i++)
+		{			
+			slots[i] = new Pane();
+			Rectangle slotBg = new Rectangle(250,100,new Color(1,1,1,1));
+			slots[i].setPrefSize(260, 100);
+			Label slotText = new Label();
+			slotText.setPadding(new Insets(25));
+			VBox.setMargin(slots[i], new Insets(10));
+			slots[i].getChildren().addAll(slotBg,slotText);
+			cont.getChildren().add(slots[i]);
+			
+			int index = i;
+			
+			slots[i].setOnMouseEntered(e -> {
+				((Rectangle)(slots[index].getChildren().get(0))).setFill(new Color(0.1,0.1,0.1,1));
+			});
+			
+			slots[i].setOnMouseExited(e -> {
+				((Rectangle)(slots[index].getChildren().get(0))).setFill(new Color(1,1,1,1));
+			});
+			
+			try 
+			{
+				freader = new FileReader("savegame-"+ i +".txt");
+				BufferedReader br = new BufferedReader(freader);
+				String s = "";
+				try 
+				{
+					s = br.readLine();
+					slotText.setText(s);
+				} 
+				catch (IOException e1) {
+					statusConsole.appendText("could not read file at index "+i+"!\n");
+				}
+			}
+			catch(FileNotFoundException e)
+			{
+				slotText.setText("EMPTY");
+			}
+
+
+			slots[i].setOnMouseClicked(e -> {
+				if(loading) 
+				{
+					loadGame(index, slots[index]);
+				}
+				else if(saving)
+				{
+					saveGame(index, slots[index]);
+				}
+			});
+			
+		}
+
+		saveGamePane.setContent(cont);
+		Scene saveGame = new Scene(saveGamePane, 300, 600);
+		window4.setScene(saveGame);
+		
+		saveGame.addEventHandler(KeyEvent.KEY_PRESSED, key -> {
+			if(key.getCode() == KeyCode.ESCAPE)
+			{
+				window4.close();
+			}
+		});
+		
+		window4.setOnCloseRequest(e -> {
+			saving = false;
+			loading = false;
+		});
+		
+		
+		/*
+		 * notification Scene
+		 */
+		Stage window2 = new Stage();
+		BorderPane nPanel = new BorderPane();	
+		Label question = new Label("Save game?");
+		Button affBtn = new Button("Yes");
+		Button decBtn = new Button("No");
+		BorderPane.setMargin(affBtn, new Insets(50));
+		BorderPane.setMargin(decBtn, new Insets(50));
+		BorderPane.setMargin(question, new Insets(10));
+		nPanel.setLeft(affBtn);
+		nPanel.setRight(decBtn);
+		nPanel.setTop(question);
+		BorderPane.setAlignment(question, Pos.CENTER);
+		Scene notifyScreen = new Scene(nPanel,320,150);
+		window2.setScene(notifyScreen);
+		affBtn.setOnAction(e -> {
+				saving = true;
+				window4.show();
+				window2.hide();
+				resetWholeGame();
+			}
+		);
+		decBtn.setOnAction(e -> {
+				window2.hide();
+				resetWholeGame();
+			}
+		);
+		
+		notifyScreen.addEventHandler(KeyEvent.KEY_PRESSED, key -> {
+			if(key.getCode() == KeyCode.ESCAPE)
+			{
+				window2.close();
+				resetWholeGame();
+			}
+		});
+
 		
 		//laying out all the elements
 		Button start = new Button("host new game");
@@ -309,7 +403,7 @@ public class App2 extends Application {
 		main.setRight(rightSide);
 		BorderPane.setMargin(rightSide, new Insets(25));
 		
-		temp1();
+		saveGameState();
 		console.textProperty().set(sb.toString());
     	sb.append("-------------------------------\nTurn 1:\n");
     	console.setText(sb.toString());
@@ -489,6 +583,19 @@ public class App2 extends Application {
 			}
 
 		});
+		
+		scene.addEventHandler(KeyEvent.KEY_PRESSED, key -> {
+			if(key.getCode() == KeyCode.PAGE_UP)
+			{
+				
+			}
+			else if(key.getCode() == KeyCode.PAGE_DOWN)
+			{
+				board = boardList.get(boardList.size()-2);
+				//turn.set((turn.get() - 1) % 2 );
+				redraw(grid);
+			}
+		});
 
 		
 		p1counters.addListener((observableValue,oldValue,newValue) -> {
@@ -615,7 +722,7 @@ public class App2 extends Application {
 		
 		resignPiece.setOnAction(e -> {
 			
-			parseId(startPane.getId(),0);
+			//parseId(startPane.getId(),0);
 			String s = showingPiece.get();
 			int x = Integer.parseInt(s.substring(0,2));
 			int y = Integer.parseInt(s.substring(2,4));
@@ -624,7 +731,6 @@ public class App2 extends Application {
 		});
 		
 		rotateClockwise.setOnAction(e -> {
-			parseId(startPane.getId(),0);
 			String s = showingPiece.get();
 			int i = Integer.parseInt(s.substring(0,2));
 			int j = Integer.parseInt(s.substring(2,4));
@@ -636,7 +742,7 @@ public class App2 extends Application {
 				return;
 			}
 			
-			System.out.println("dir "+board[i][j][11]+" h: "+h);
+			System.out.println("dir "+board[i][j][6]+" h: "+h);
 			h -= 90;
 			double x = Math.cos((h*Math.PI*2)/360.0);
 			double y = Math.sin((h*Math.PI*2)/360.0);
@@ -661,7 +767,7 @@ public class App2 extends Application {
 			{
 				dir = 90; 
 			}
-			board[i][j][11] = dir;
+			board[i][j][6] = dir;
 			rotatedPieceLoc = new int[] {i, j};
 			rotationAngle = dir;
 			legalMovesObs.clear();
@@ -670,7 +776,6 @@ public class App2 extends Application {
 		});
 		
 		rotateCounterClockwise.setOnAction(e -> {
-			parseId(startPane.getId(),0);
 			String s = showingPiece.get();
 			int i = Integer.parseInt(s.substring(0,2));
 			int j = Integer.parseInt(s.substring(2,4));
@@ -682,7 +787,7 @@ public class App2 extends Application {
 				return;
 			}
 			
-			System.out.println("dir "+board[i][j][11]+" h: "+h);
+			System.out.println("dir "+board[i][j][6]+" h: "+h);
 			h += 90;
 			double x = Math.cos((h*Math.PI*2)/360.0);
 			double y = Math.sin((h*Math.PI*2)/360.0);
@@ -706,7 +811,7 @@ public class App2 extends Application {
 			{
 				dir = 90; 
 			}
-			board[i][j][11] = dir;
+			board[i][j][6] = dir;
 			rotatedPieceLoc = new int[] {i,j};
 			rotationAngle = dir;
 			legalMovesObs.clear();
@@ -739,7 +844,6 @@ public class App2 extends Application {
 				
 			}
 			
-			
 		});
 		
 		resetGame.setOnAction(e -> {
@@ -761,7 +865,7 @@ public class App2 extends Application {
 			p1countersPerTurn.set(tempCounters[1]);
 			p2counters.set(tempCounters[2]);
 			p2countersPerTurn.set(tempCounters[3]);
-			resetPlayerStats();
+			resetGameData();
 			arrayCopy(tempBoard,board);
 			redraw(grid);
 		});
@@ -780,7 +884,7 @@ public class App2 extends Application {
 						defenderSource[1], defenderSource[2], defendTarget[0], defendTarget[1],
 						queensMarkTarget[0], queensMarkTarget[1],
 						resignedPieceType, resignedPieceLoc[0], resignedPieceLoc[1],
-						rotatedPieceLoc[0], rotatedPieceLoc[1], rotationAngle);
+						rotatedPieceLoc[0], rotatedPieceLoc[1], rotationAngle, queenAreaLvl, generalPromotionLoc[0], generalPromotionLoc[1]);
 				sendMove(move);
 				
 				
@@ -797,6 +901,16 @@ public class App2 extends Application {
 			}
 			
 			resign(turn.intValue());
+		});
+		
+		save.setOnAction(e -> {
+			window4.show();
+			saving = true;
+		});
+
+		load.setOnAction(e -> {
+			window4.show();
+			loading = true;
 		});
 		
 		exit.setOnAction(e -> {
@@ -821,41 +935,35 @@ public class App2 extends Application {
 			int type = board[x][y][1];
 			
 			String s = "";
+			
+			s = pieceType((char)board[x][y][5])+" ("+(char)board[x][y][5]+") \nAttack Cost: "+PieceData.pieceAC(type)+"\nDefense Cost: "+PieceData.pieceDC(type)+"\nMove cost: "+PieceData.moveCost(type)+"\nValue: "+PieceData.pieceValue(type);
+			
 			switch(type) {
 			case 1:
-				s = "Soldier (p) \nAttack Cost: "+pawnMaxAC+"\nDefense Cost: "+pawnMaxDC+"\nMove cost: "+pawnMC+"\nValue: "+1;
 				pieceMenu.getChildren().addAll(resignPiece,promoteSoldier);
 				break;
 			case 2:
-				s = "Swordsman (f) \nAttack Cost: "+swordsmanMaxAC+"\nDefense Cost: "+swordsmanMaxDC+"\nMove cost: "+swordsmanMC+"\nValue: "+4; 
 				pieceMenu.getChildren().addAll(resignPiece,rotateClockwise,rotateCounterClockwise);
 				break;
 			case 3:
-				s = "Vanguard (v) \nAttack Cost: "+vanguardMaxAC+"\nDefense Cost: "+vanguardMaxDC+"\nMove cost: "+vanguardMC+"\nValue: "+6; 
 				pieceMenu.getChildren().addAll(resignPiece,rotateClockwise,rotateCounterClockwise);
 				break;
 			case 4:
-				s = "Scythe (h) \nAttack Cost: "+scytheMaxAC+"\nDefense Cost: "+scytheMaxDC+"\nMove cost: "+scytheMC+"\nValue: "+5;
 				pieceMenu.getChildren().addAll(resignPiece,rotateClockwise,rotateCounterClockwise);
 				break;
 			case 5:
-				s = "Prince (r) \nAttack Cost: "+princeMaxAC+"\nDefense Cost: "+princeMaxDC+"\nMove cost: "+princeMC+"\nValue: "+6;
 				pieceMenu.getChildren().addAll(resignPiece);
 				break;
 			case 6:
-				s = "Guardian (g) \nAttack Cost: "+guardianMaxAC+"\nDefense Cost: "+guardianMaxDC+"\nMove cost: "+guardianMC+"\nValue: "+9;
 				pieceMenu.getChildren().addAll(resignPiece,rotateClockwise,rotateCounterClockwise);
 				break;
 			case 7:
-				s = "Spearman (s) \nAttack Cost: "+spearmanMaxAC+"\nDefense Cost: "+spearmanMaxDC+"\nMove cost: "+spearmanMC+"\nValue: "+5;
-				pieceMenu.getChildren().addAll(resignPiece);
+				pieceMenu.getChildren().addAll(resignPiece,rotateClockwise,rotateCounterClockwise);
 				break;
 			case 8:
-				s = "General (k) \nAttack Cost: "+generalMaxAC+"\nDefense Cost: "+generalMaxDC+"\nMove cost: "+generalMC+"\nValue: "+15;
 				pieceMenu.getChildren().addAll(resignPiece);
 				break;
 			case 9:
-				s = "Queen (q) \nAttack Cost: "+queenMaxAC+"\nDefense Cost: "+queenMaxDC+"\nMove cost: "+queenMC+"\nValue: "+queenValue;
 				pieceMenu.getChildren().addAll(resignPiece,placeScarletMark,rotateClockwise,rotateCounterClockwise);
 			}
 			
@@ -871,9 +979,29 @@ public class App2 extends Application {
 		});
 		
 		promoteSoldier.setOnAction(e -> {
+
+			for(int i = 0; i<11; i++)
+			{
+				for(int j = 0; j<11; j++)
+				{
+					//general still on the board
+					if(board[j][i] != null && board[j][i][1] == 8 && board[j][i][2] == turn.get())
+					{
+						statusConsole.appendText("General still exists on the board!\n");
+						return;
+					}
+				}
+			}
 			
-		
+			String s = showingPiece.get();
+			int x = Integer.parseInt(s.substring(0,2));
+			int y = Integer.parseInt(s.substring(2,4));
 			
+			board[x][y] = new int[] {pieceIdCap,general,turn.get(),x,y,107, 0, PieceData.pieceHP(8)};
+			generalPromotionLoc[0] = x;
+			generalPromotionLoc[1] = y;
+			redraw(grid);
+			pieceIdCap++;
 		});
 
 		
@@ -890,7 +1018,7 @@ public class App2 extends Application {
 	}
 	
 	
-	private void temp1() {
+	private void saveGameState() {
 		turn.addListener((observableValue,oldValue,newValue)-> {
 					
 			//System.out.println((newValue.intValue() == 1 ? "Black" : "Red")+ " turn started");
@@ -928,7 +1056,7 @@ public class App2 extends Application {
 	}
 	
 	/*
-	 * save current position for reset() method
+	 * save current position for the reset() method
 	 */
 	
 	private void savePos(int[][][] b) {
@@ -938,13 +1066,15 @@ public class App2 extends Application {
 		tempCounters[3] = p2countersPerTurn.get();
 		arrayCopy(b,tempBoard);
 		
+		System.out.println("saving state!");
+		
 	}
 	
 	/*
-	 * reset counter data
+	 * reset all game data for the reset()
 	 */
 	
-	private void resetPlayerStats() {
+	private void resetGameData() {
 		
 		moveSource =  new int[] {-1, -1,-1};
 		moveTarget  = new int[] {-1, -1};
@@ -957,12 +1087,11 @@ public class App2 extends Application {
 		resignedPieceLoc = new int[] {-1,-1};
 		queensMarkTarget = new int[] {-1,-1};
 		rotatedPieceLoc = new int[] {-1,-1};
+		generalPromotionLoc = new int[] {-1,-1};
 		rotationAngle = 0;
-//		defenderSource = null;
-//		defendTarget = null;
 		moved = false;
 		markPlaced = false;
-		hasPlacedQueensMark = false;
+		hasQueensMarkOrQueen = false;
 		hasAttacked = false;
 		hasDefended = false;
 		hasResignedPiece = false;
@@ -972,11 +1101,11 @@ public class App2 extends Application {
 	}
 	
 	/*
-		Reset board, counter stats to initial positions
+		Reset board and stats to initial positions
 	 */
 	
 	private void resetWholeGame() {
-		resetPlayerStats();
+		resetGameData();
 		initBoard(grid);
 		p1counters.set(startCounters);
 		p1countersPerTurn.set(startIncome);
@@ -1005,8 +1134,7 @@ public class App2 extends Application {
 		s += "won by resignation";
 		sb.append(s);
 		console.setText(sb.toString());
-		
-		
+
 		
 	}
 	
@@ -1015,7 +1143,83 @@ public class App2 extends Application {
 	 * Load game
 	 */
 	
-	private void loadGame() {
+	private void loadGame(int slotNo, Pane p) {
+		
+		clearBoard();
+		
+		FileReader freader = null;
+		try 
+		{
+			freader = new FileReader("savegame-"+ slotNo +".txt");
+		} 
+		catch (FileNotFoundException e) 
+		{
+			e.printStackTrace();
+		}
+		
+		BufferedReader br = new BufferedReader(freader);
+		String s;
+		int lineCounter = 0;
+		
+		try 
+		{
+			while((s = br.readLine()) != null)
+			{
+				
+				String[] line = s.split(" ");
+				
+				if(lineCounter == 1)
+				{
+					plies = Integer.parseInt(line[0]);
+					turn.set(Integer.parseInt(line[1]));
+				}
+				else if(lineCounter == 2)
+				{
+					p1counters.set(Integer.parseInt(line[0]));
+					p1countersPerTurn.set(Integer.parseInt(line[1]));
+					p2counters.set(Integer.parseInt(line[2]));
+					p2countersPerTurn.set(Integer.parseInt(line[3]));
+				}
+//				else if(lineCounter == 3)
+//				{
+//					moved = Integer.parseInt(line[0]) == 0 ? false : true;
+//					markPlaced = Integer.parseInt(line[1]) == 0 ? false : true;
+//					hasAttacked = Integer.parseInt(line[2]) == 0 ? false : true;
+//					hasDefended = Integer.parseInt(line[3]) == 0 ? false : true;
+//					hasResignedPiece = Integer.parseInt(line[4]) == 0 ? false : true;
+//					hasQueensMarkOrQueen = Integer.parseInt(line[5]) == 0 ? false : true;
+//				}
+				else if(lineCounter != 0)
+				{
+					int[] t = new int[line.length];
+					for(int k = 0; k<line.length; k++)
+					{
+						t[k] = Integer.parseInt(""+line[k]);
+					}
+					//assign vector into board at t[3], t[4]
+					board[t[3]][t[4]] = t;
+				}
+				System.out.println(Arrays.toString(line));
+				
+				lineCounter++;
+			}
+			//game data should be at the initial values
+			resetGameData();
+			//triggering the save of board into tempBoard now because tempBoard might be at default value(starting position)
+			savePos(board);
+			
+			sb.delete(0, sb.length());
+			sb.append("Turn "+(int)(plies/2.0)+":\n");
+			console.setText(sb.toString());
+			redraw(grid);
+			statusConsole.appendText("successfully loaded game "+((Label)p.getChildren().get(1)).getText()+"\n");
+			freader.close();
+			br.close();
+		} 
+		catch (IOException e) 
+		{
+			e.printStackTrace();
+		}
 		
 	}
 	
@@ -1024,8 +1228,63 @@ public class App2 extends Application {
 	 * Save game
 	 */
 	
-	private void saveGame() {
+	private void saveGame(int slotNo, Pane p) {
 		
+		System.out.println(LocalTime.now());
+		String s = "";
+		String header = LocalDate.now().toString()+" "+LocalTime.now().getHour()+":"+LocalTime.now().getMinute()+":"+LocalTime.now().getSecond()+" Turn: "+(int)(plies/2.0)+" "+(turn.get() == 1 ? "Black" : "Red");
+
+		s += header + "\n";
+		s += plies+" "+turn.get()+"\n"+tempCounters[0]+" "+tempCounters[1]+" "+tempCounters[2]+" "+tempCounters[3]+"\n";
+		System.out.println(tempCounters[0]+" "+tempCounters[1]+" "+tempCounters[2]+" "+tempCounters[3]);
+		//s += (moved ? 1 : 0) +" "+ (markPlaced ? 1 : 0) +" "+ (hasAttacked ? 1 : 0) +" "+ (hasDefended ? 1 : 0) +" "+ (hasResignedPiece ? 1 : 0) +" "+ (hasQueensMarkOrQueen ? 1 : 0)+"\n";
+//		s += Arrays.toString(moveSource)+"\n" + Arrays.toString(moveTarget)+"\n";
+//		s += Arrays.toString(markSource)+"\n" + Arrays.toString(markTarget)+"\n";
+//		s += Arrays.toString(attackSource)+"\n" + Arrays.toString(attackTarget)+"\n";
+//		s += Arrays.toString(defenderSource)+"\n"+Arrays.toString(defendTarget)+"\n";
+//		s += Arrays.toString(resignedPieceLoc)+"\n" + resignedPieceType;
+//		s += Arrays.toString(queensMarkTarget)+"\n";
+//		s += Arrays.toString(rotatedPieceLoc)+"\n";
+//		s += rotationAngle;
+//		 
+//		for(int i = 0; i<queensMarkPieceIDList.size(); i++)
+//		{
+//			s += queensMarkPieceIDList.get(i)+" ";
+//		}
+//		
+//		s += "\n";
+		
+		//revert back to state at the start of the turn
+		arrayCopy(tempBoard,board);
+
+		
+		
+		try(FileWriter outFile = new FileWriter("savegame-"+ slotNo +".txt",false);
+				BufferedWriter bWriter = new BufferedWriter(outFile))
+		{
+			
+			for(int i = 0; i<11; i++)
+			{
+				for(int j = 0; j<11; j++)
+				{
+					if(board[j][i] != null) {
+						for(int k = 0; k<board[j][i].length; k++)
+						{
+							s += String.valueOf(board[j][i][k])+" ";
+						}
+						s += "\n";
+					}
+				}
+			}
+
+			bWriter.write(s);	
+		}
+		catch(IOException e){
+			e.printStackTrace();
+		}
+		
+		((Label)p.getChildren().get(1)).setText(header);
+		statusConsole.appendText("saved game in slot "+(slotNo+1)+"!\n");
 	}
 	
 	
@@ -1056,28 +1315,38 @@ public class App2 extends Application {
 		int rotPX = move[20];
 		int rotPY = move[21];
 		int rot = move[22];
-		
+		int qmlvl = move[23];
+		int gpx = move[24];
+		int gpy = move[25];
 		
 		if (tX != -1) {
 			makeMove(sX, sY, tX, tY, grid);
 		}
 		
 		if (markX != -1) {
-			placeMark(markX,markY,markColor,grid);
+			if(board[markX][markY] != null)
+			{
+				upgradeMark(markX,markY);
+			}
+			else 
+			{
+				placeMark(markX,markY,markColor);
+			}
+			
 		}
 		
 		if (attTX != -1) {
 			attack(attSX,attSY,attTX,attTY);
 		}
 		
-		if(defSX != -1)
+		if(defTX != -1)
 		{
 			defend(defSX, defSY, defTX, defTY);
 		}
 		
 		if(qmX != -1)
 		{
-			placeQueensMark(qmX, qmY);
+			placeQueensMark(qmX, qmY, qmlvl);
 		}
 		
 		if(resP != 0)
@@ -1085,9 +1354,9 @@ public class App2 extends Application {
 			resignPiece(resPX, resPY);
 		}
 		
-		if(rotPX != 0)
+		if(rotPX != -1)
 		{
-			board[rotPX][rotPY][11] = rot;
+			board[rotPX][rotPY][6] = rot;
 		}
 		
 		if(RuleSet.checkAreas(turn.get(), board))
@@ -1097,7 +1366,7 @@ public class App2 extends Application {
 		
 		
 		//advance turn after opponents move was made
-		setTurn(sX,sY,tX,tY,markX,markY,attSX,attSY,attTX,attTY,defSX,defSY,defTX,defTY,qmX,qmY,resP,resPX,resPY,rotPX,rotPY,rot);
+		setTurn(sX,sY,tX,tY,markX,markY,attSX,attSY,attTX,attTY,defSX,defSY,defTX,defTY,qmX,qmY,resP,resPX,resPY,rotPX,rotPY,rot,qmlvl,gpx,gpy);
 
 		
 		redraw(grid);
@@ -1200,10 +1469,18 @@ public class App2 extends Application {
 
 				if(squareContent(temp,temp2) != null) {
 					if(squareContent(temp,temp2).equals("mark_a_b")) {
-						piece.setImage(new Image(getClass().getClassLoader().getResource("resources/mark_area_r.png").toExternalForm(),64,64,true,true));	
+						piece.setImage(new Image(getClass().getClassLoader().getResource("resources/mark_area_r.png").toExternalForm(),64,64,true,true));
+						if(board[j][i][8] > 0)
+						{
+							hpCounter.setText(String.valueOf(board[j][i][8]));
+						}
 					}
 					else if(squareContent(temp, temp2).equals("mark_a_r")) {
 						piece.setImage(new Image(getClass().getClassLoader().getResource("resources/mark_area_b.png").toExternalForm(),64,64,true,true));
+						if(board[j][i][8] > 0)
+						{
+							hpCounter.setText(String.valueOf(board[j][i][8]));
+						}
 					}
 //					else if(squareContent(temp,temp2).equals("piece_d")) {
 //						piece.setImage(new Image(getClass().getClassLoader().getResource("resources/mark_def.png").toExternalForm(),64,64,true,true));
@@ -1221,9 +1498,9 @@ public class App2 extends Application {
 					}
 					else {
 						piece.setImage(new Image(getClass().getClassLoader().getResource("resources/"+squareContent(temp,temp2)+".png").toExternalForm(),64,64,true,true));
-						if(board[j][i][12] > 0)
+						if(board[j][i][7] > 0)
 						{
-							hpCounter.setText(String.valueOf(board[j][i][12]));
+							hpCounter.setText(String.valueOf(board[j][i][7]));
 						}
 					}
 				}
@@ -1248,8 +1525,7 @@ public class App2 extends Application {
 					int t2 = temp2;
 				
 					if((board[t][t2] != null)) {
-						System.out.println( (board[t][t2] == null) +" "+(board[t][t2][2] == turn.get() )+" "+ 
-							(board[t][t2][2] != turn.get() && attackMode) );
+						System.out.println( (board[t][t2] == null) +" "+(board[t][t2][2] == turn.get() )+" "+ (board[t][t2][2] != turn.get() && attackMode) );
 					}
 					
 					
@@ -1266,7 +1542,7 @@ public class App2 extends Application {
 							(!freePlay && board[t][t2][2] == playerColor) ||
 							(freePlay && board[t][t2][2] != turn.get() && attackMode) ||
 							(!freePlay && board[t][t2][2] != playerColor && attackMode)) {
-						System.out.println("&&");
+						
 						System.out.println("t "+t+" t2 "+t2);
 						
 						//reset legal moves / ranges
@@ -1308,7 +1584,7 @@ public class App2 extends Application {
 										{
 											if(markSource[1] != attackSource[1] || markSource[2] != attackSource[2])
 											{
-												placeMark(t,t2,turn.get(),grid);
+												placeMark(t,t2,turn.get());
 												markTarget = new int[] {temp,temp2};
 											}
 											else
@@ -1316,6 +1592,35 @@ public class App2 extends Application {
 												statusConsole.appendText("cannot place a mark with a piece that has attacked this turn!\n");
 												
 												
+											}
+											
+										}
+										else if(board[t][t2][0] < 0 && board[t][t2][2] == turn.get())
+										{
+											if(board[t][t2][8] < 5)
+											{
+												if(board[t][t2][6] != 5)
+												{
+													if(((turn.get()==1 && p1counters.get() >= 2*p1countersPerTurn.get()) || (turn.get()==2 && p2counters.get() >= 2*p2countersPerTurn.get())) )
+													{
+														upgradeMark(t,t2);
+														markTarget = new int[] {temp, temp2};
+													}
+													else
+													{
+														statusConsole.appendText("not enough counters for mark upgrade!\n");
+													}
+													
+												}
+												else
+												{
+													statusConsole.appendText("queen mark is not upgradeable!\n");
+												}
+												
+											}
+											else
+											{
+												statusConsole.appendText("mark is at maximum level!\n");
 											}
 											
 										}
@@ -1338,51 +1643,58 @@ public class App2 extends Application {
 							else if(attackMode){
 								
 								
-								System.out.println("#"+p1counters.get()+"#"+attackSource[0]+"#"+attackSource[1]+"#"+attackSource[2]);
-								
-								if((turn.get()==1 && p1counters.get() >= board[attackSource[1]][attackSource[2]][8]) ||
-								   (turn.get()==2 && p2counters.get() >= board[attackSource[1]][attackSource[2]][8]))
+								//System.out.println("#"+p1counters.get()+"#"+attackSource[0]+"#"+attackSource[1]+"#"+attackSource[2]);
+								if(board[temp][temp2] != null)
 								{
-									if(!RuleSet.iterateRange(attackSource[1], attackSource[2], temp, temp2, board, true, true, true))
+									if((turn.get()==1 && p1counters.get() >= PieceData.pieceAC(board[attackSource[1]][attackSource[2]][1])) ||
+								   (turn.get()==2 && p2counters.get() >= PieceData.pieceAC(board[attackSource[1]][attackSource[2]][1])))
 									{
-										if(!hasAttacked)
+										if(!RuleSet.iterateRange(attackSource[1], attackSource[2], temp, temp2, board, true, true, true))
 										{
-											if(moveTarget[0] != attackSource[1] || moveTarget[1] != attackSource[2])
+											if(!hasAttacked)
 											{
-												if(markSource[1] != attackSource[1] || markSource[2] != attackSource[2])
+												if(moveTarget[0] != attackSource[1] || moveTarget[1] != attackSource[2])
 												{
-													attack(attackSource[1], attackSource[2], temp,temp2);
-													((ImageView) ((Pane) sqArray[temp][temp2]).getChildren().get(1)).setImage(null);
-													attackTarget = new int[] {temp,temp2};
+													if(markSource[1] != attackSource[1] || markSource[2] != attackSource[2])
+													{
+														attack(attackSource[1], attackSource[2], temp,temp2);
+														((ImageView) ((Pane) sqArray[temp][temp2]).getChildren().get(1)).setImage(null);
+														attackTarget = new int[] {temp,temp2};
+													}
+													else
+													{
+														statusConsole.appendText("cannot attack with a piece that placed a mark during the turn!\n");
+													}
+													
 												}
 												else
 												{
-													statusConsole.appendText("cannot attack with a piece that placed a mark during the turn!\n");
+													statusConsole.appendText("cannot attack with a piece that was moved during the turn!\n");
 												}
+												
 												
 											}
 											else
 											{
-												statusConsole.appendText("cannot attack with a piece that was moved during the turn!\n");
+												statusConsole.appendText("already attacked during the turn!\n");
 											}
-											
 											
 										}
 										else
 										{
-											statusConsole.appendText("already attacked during the turn!\n");
+											statusConsole.appendText("a piece blocking the attack!\n");
 										}
-										
-									}
-									else
-									{
-										statusConsole.appendText("a piece blocking the attack!\n");
-									}
 								}
 								else
 								{
 									statusConsole.appendText("not enough counters!\n");
 								}
+								}
+								else
+								{
+									statusConsole.appendText("target square is empty!\n");
+								}
+
 
 									
 
@@ -1390,8 +1702,8 @@ public class App2 extends Application {
 							else if(defenseMode) {
 								parseId(startPane.getId(),2);
 								
-								if((turn.get()==1 && p1counters.get() >= board[defenderSource[1]][defenderSource[2]][9]) ||
-										(turn.get()==2 && p2counters.get() > board[defenderSource[1]][defenderSource[2]][9])) {
+								if((turn.get()==1 && p1counters.get() >= PieceData.pieceDC(board[defenderSource[1]][defenderSource[2]][1])) ||
+										(turn.get()==2 && p2counters.get() > PieceData.pieceDC(board[defenderSource[1]][defenderSource[2]][1]))) {
 									
 									if(!hasDefended) 
 									{
@@ -1423,15 +1735,40 @@ public class App2 extends Application {
 								System.out.println("queens mark placement");
 								for(int[] is : areaInterior)
 								{
+									
 									System.out.println("temp : "+temp+" temp2 : "+temp2+" is[1] : "+is[1]+" is[0] : "+is[0]);
 									if(board[temp][temp2] == null && is[0] == temp && is[1] == temp2)
 									{
-										if(!hasPlacedQueensMark)
+										for(int m = 0; m<11; m++)
 										{
-											placeQueensMark(temp,temp2);
-											queensMarkTarget = new int[] {temp, temp2};
+											for(int n = 0; n<11; n++)
+											{
+												if(board[m][n] != null && board[m][n][2] == turn.get() && 
+														((board[m][n][0] < 0 && board[m][n][6] == 5) || (board[m][n][1] == 9)))
+												{
+													hasQueensMarkOrQueen = true;
+												}
+											}
 										}
-										
+										if(!hasQueensMarkOrQueen)
+										{
+
+											if((turn.get() == 1 && p1counters.get() >= (2 * p1countersPerTurn.get() - queenAreaLvl)) || 
+											(turn.get() == 2 && p2counters.get() >= (2 * p2countersPerTurn.get() - queenAreaLvl)))
+											{
+												placeQueensMark(temp, temp2, queenAreaLvl);
+												queensMarkTarget = new int[] {temp, temp2};
+											}
+											else
+											{
+												statusConsole.appendText("not enough counters!\n");
+											}
+											
+										}
+										else
+										{
+											statusConsole.appendText("only one Queen or Queen's Mark can exist on the board at the same time!\n");
+										}
 									}
 								}
 								
@@ -1488,8 +1825,8 @@ public class App2 extends Application {
 						parseId(((Pane)event.getGestureSource()).getId(),0);
 						
 
-						if((turn.get()==1 && p1counters.get() >= board[moveSource[1]][moveSource[2]][10]) ||
-								(turn.get()==2 && p2counters.get() >= board[moveSource[1]][moveSource[2]][10])) 
+						if((turn.get()==1 && p1counters.get() >= PieceData.moveCost(board[moveSource[1]][moveSource[2]][1])) ||
+								(turn.get()==2 && p2counters.get() >= PieceData.moveCost(board[moveSource[1]][moveSource[2]][1]))) 
 						{
 							if(moveSource[1] != attackSource[1] || moveSource[2] != attackSource[2])
 							{
@@ -1569,10 +1906,20 @@ public class App2 extends Application {
 	}
 	
 	
-	private void placeQueensMark(int temp, int temp2) {
+	private void placeQueensMark(int temp, int temp2, int lvl) {
+		
+		if(turn.get() == 1 )
+		{
+			p1counters.set(p1counters.get() - (2*p1countersPerTurn.get() - lvl));
+		}
+		else
+		{	
+			p2counters.set(p2counters.get() - (2*p2countersPerTurn.get() - lvl));
+		}
+		
 		board[temp][temp2] = new int[] {markId,-1,turn.get(),temp,temp2,109,1,5,plies};
 		
-		hasPlacedQueensMark  = true;
+		hasQueensMarkOrQueen  = true;
 		
 		redraw(grid);
 		
@@ -1598,7 +1945,7 @@ public class App2 extends Application {
 			y = ((int[])list[i])[1];
 			System.out.println(x+" "+y+" "+paneX+" "+paneY);
 			if(x == paneX && y == paneY) {
-				System.out.println("is legal range");
+				//System.out.println("is legal range");
 				return true;
 			}
 		}
@@ -1612,7 +1959,7 @@ public class App2 extends Application {
 	
 	private void parseId(String id,int mode){
 		
-		System.out.println("parsing: "+id);
+		//System.out.println("parsing: "+id);
 		
 		if(mode == 0) {
 			moveSource = new int[3];
@@ -1673,10 +2020,20 @@ public class App2 extends Application {
 		
 		//subtract move cost
 		if(piece[2] == 1) {
-			p1counters.set(p1counters.get() - piece[10]);
+			p1counters.set(p1counters.get() - PieceData.moveCost(piece[1]));
 		}
 		else if(piece[2] == 2) {
-			p2counters.set(p2counters.get() - piece[10]);
+			p2counters.set(p2counters.get() - PieceData.moveCost(piece[1]));
+		}
+		
+		//update piece coordinates
+		piece[3] = tX;
+		piece[4] = tY;
+		
+		//remove defending hp counters
+		if(piece[7] > PieceData.pieceHP(piece[1]))
+		{
+			piece[7] = PieceData.pieceHP(piece[1]);
 		}
 
 		//make the move from start coordinates parsed from start Pane id string
@@ -1719,7 +2076,7 @@ public class App2 extends Application {
 	 * Place mark at (x,y) and update board with redraw()
 	 */
 	
-	private void placeMark(int x, int y, int color, GridPane grid) {
+	private void placeMark(int x, int y, int color) {
 		int markChar = 109;
 		
 		if(turn.get() == 1) {
@@ -1731,7 +2088,7 @@ public class App2 extends Application {
 			p2countersPerTurn.set(p2countersPerTurn.get()+1);
 		}
 
-		board[x][y] = new int[] {markId,-1,color,x,y,markChar,1,1};
+		board[x][y] = new int[] {markId,-1,color,x,y,markChar,1,1,0};
 		redraw(grid);
 		markId--;
 		markPlaced = true;
@@ -1745,6 +2102,28 @@ public class App2 extends Application {
 			victoryAchieved = true;
 		}
 	}
+	
+	
+	/*
+	 * Upgrade mark at (x,y)
+	 * 
+	 */
+	
+	private void upgradeMark(int x, int y)
+	{
+		
+		if(turn.get() == 1)
+		{
+			p1counters.set(p1counters.get()- 2 * p1countersPerTurn.get());
+		}
+		else
+		{
+			p2counters.set(p2counters.get()- 2 * p2countersPerTurn.get());
+		}
+		board[x][y][8]++;
+		redraw(grid);
+	}
+	
 	
 	private void testQueensMarkCondition(int color)
 	{
@@ -1761,9 +2140,12 @@ public class App2 extends Application {
 	}
 	
 	private void testQueensMarkCondition(int x, int y, int color) {
+		
+		areaInterior.clear();
+		
 		int[] area = RuleSet.getArea(x, y, board, color, x);
 		
-		System.out.println("area"+area);
+		
 		
 		if(area != null)
 		{
@@ -1803,6 +2185,11 @@ public class App2 extends Application {
 			
 		}
 		
+		if(areaInterior.size() > 0)
+		{
+			queenAreaLvl = board[area[0]][area[2]][8];
+		}
+		
 	}
 
 
@@ -1813,32 +2200,67 @@ public class App2 extends Application {
 	private void attack(int sx, int sy, int tx, int ty) {
 		System.out.println("attacking from "+sx+", "+sy+" to "+tx+", "+ty);
 		
-		//increment counters by piece value
+		//subtract attack cost of the attacking piece
 		if(board[tx][ty][2]==1) {
-			p2counters.set(p2counters.get() + board[tx][ty][6] - board[sx][sy][8]);
-			if(board[tx][ty][0] < 0) {
-				p1countersPerTurn.set(p1countersPerTurn.get()-1);
-			}
+			p2counters.set(p2counters.get() - PieceData.pieceAC(board[sx][sy][1]));
+			
 		}
 		else {
-			p1counters.set(p1counters.get() + board[tx][ty][6] - board[sx][sy][8]);
-			if(board[tx][ty][0] < 0) {
-				p2countersPerTurn.set(p2countersPerTurn.get()-1);
-			}
+			p1counters.set(p1counters.get() - PieceData.pieceAC(board[sx][sy][1]));
+			
 		}
+		
 		hasAttacked = true;
 		
 		testQueensMarkCondition(turn.get());
 		
 		
-		
-		if(board[tx][ty][12] == 0)
+		//if target is captured, increment opposing players Counters by captured piece's value
+		//target is a piece:
+		if(board[tx][ty][0] > 0)
 		{
-			board[tx][ty] = null;
+			if(board[tx][ty][7] == 0)
+			{
+				if(board[tx][ty][2]==1) 
+				{
+					p2counters.set(p2counters.get() + PieceData.pieceValue(board[tx][ty][1]));
+				}
+				else
+				{
+					p1counters.set(p1counters.get() + PieceData.pieceValue(board[tx][ty][1]));
+				}
+				board[tx][ty] = null;
+			}
+			else
+			{
+				board[tx][ty][7]--;
+			}
 		}
-		else
+		//target is a mark:
+		else {
+			if(board[tx][ty][8] == 0)
+			{
+				if(board[tx][ty][2]==1) 
+				{
+					p2counters.set(p2counters.get() + 1);
+					p1countersPerTurn.set(p1countersPerTurn.get()-1);
+				}
+				else
+				{
+					p1counters.set(p1counters.get() + 1);
+					p2countersPerTurn.set(p2countersPerTurn.get()-1);
+				}
+				board[tx][ty] = null;
+			}
+			else
+			{
+				board[tx][ty][8]--;
+			}
+		}
+		
+		if(RuleSet.checkAreas(turn.get(), board))
 		{
-			board[tx][ty][12]--;
+			victoryAchieved = true;
 		}
 		
 		redraw(grid);
@@ -1850,65 +2272,24 @@ public class App2 extends Application {
 	
 	private void defend(int sX, int sY, int tX, int tY) 
 	{
+		//subtract defense cost from the defender
 		if(turn.get() == 1)
 		{
-			p1counters.set(p1counters.get() - board[sX][sY][9]);
+			p1counters.set(p1counters.get() - PieceData.pieceDC(board[sX][sY][1]));
 		}
 		else
 		{
-			p2counters.set(p2counters.get() - board[sX][sY][9]);
+			p2counters.set(p2counters.get() - PieceData.pieceDC(board[sX][sY][1]));
 		}
 		
 
 		hasDefended = true;
 		
-		board[tX][tY][12]++;
+		//increment targets hp counter
+		board[tX][tY][7]++;
 		redraw(grid);
 	}
 	
-	
-	/*
-	 * turn = 1
-	 * turnNo = 0
-	 * halfTurns = 0
-	 * 
-	 * endTUrn ->
-	 * 
-	 * halfTurns = 0, 0 % 2 == 0
-	 * 		turnNumber 0 -> 1
-	 * sb append "1."
-	 * sb append " Black"
-	 * turn = 1 -> 1 % 2 = 1 + 1 = 2
-	 * halfTurns 0 -> 1
-	 * sb append " - move" \n
-	 * --
-	 * sb in total: "1. Black - move \n"
-	 * 
-	 * 
-	 * halfTurns = 1, 1 % 2 != 0
-	 * sb append "Turn 1."
-	 * sb append " Red"
-	 * turn 2 -> 2 % 2 = 0 + 1 = 1
-	 * halfTurns 1 -> 2
-	 * sb append " - move" \n
-	 * --
-	 * sb in total: "1. Red - move \n"
-	 * 
-	 * 
-	 * halfTurns 2, 2%2 == 0
-	 * 		turnNumber 1 -> 2
-	 * sb append "Turn 2. "
-	 * sb.append "Black"
-	 * turn = 1 -> 1 % 2 = 1 + 1 = 2
-	 * halfTurns = 2 -> 3
-	 * sb append " - move \n"
-	 * --
-	 * sb in total: "Turn 2. Black - move \n"
-	 * 
-	 * 
-	 * 		
-	 * 
-	 */
 	
 	private void resignPiece(int x, int y)
 	{
@@ -1949,11 +2330,11 @@ public class App2 extends Application {
 		
 		if(turn.get() == 1)
 		{
-			p1counters.set(p1counters.get() + board[x][y][6]);
+			p1counters.set(p1counters.get() + PieceData.pieceValue(board[x][y][1]));
 		}
 		else if(turn.get() == 2)
 		{
-			p2counters.set(p2counters.get() + board[x][y][6]);
+			p2counters.set(p2counters.get() + PieceData.pieceValue(board[x][y][1]));
 		}
 		board[x][y] = null;
 
@@ -1964,74 +2345,19 @@ public class App2 extends Application {
 	 * handle printing move data into console after turn changes
 	 */
 	
-	private void setTurn(int sX, int sY, int tX, int tY, int markX, int markY, int attSX, int attSY, int attTX, int attTY, int defSX,int defSY, int defTX, int defTY, int qmX, int qmY, int resP, int resPX, int resPY, int rotPX, int rotPY, int rotAngle) {
+	private void setTurn(int sX, int sY, int tX, int tY, int markX, int markY, int attSX, int attSY, int attTX, int attTY, int defSX,
+			int defSY, int defTX, int defTY, int qmX, int qmY, int resP, int resPX, int resPY, int rotPX, int rotPY, int rotAngle, int qmlvl, int gpx, int gpy) {
 		
 		double turnNo;
-//		int pieceChar = 0;
-//		int sX = 0;
-//		int sY = 0;
-//		int tX = 0;
-//		int tY = 0;
-//		int markX = 0;
-//		int markY = 0;
-//		int attackersChar = 0;
-//		int attSX = -1; 
-//		int attSY = -1;
-//		int attTX = -1;
-//		int attTY = -1;
-//		int defendersChar = 0;
-//		int defSX = 0;
-//		int defSY = 0;
-//		int defTX=0;
-//		int defTY=0;
-//		
-//		int[] move;
-//		
-//		if(movSource != null) {
-//			pieceChar = movSource[0];
-//			sX = movSource[1];
-//			sY = movSource[2];
-//		}
-//		
-//		if(movTarget != null) {
-//			tX = movTarget[0];
-//			tY = movTarget[1];
-//		}
-//		
-//		if(markTgt != null) {
-//			markX = markTgt[0];
-//			markY = markTgt[1];
-//		}
-//		
-//		if(attSource != null) {
-//			attackersChar = attSource[0];
-//			attSX = attSource[1];
-//			attSY = attSource[2];
-//			
-//		}
-//		if(attTarget != null) {
-//			attTX = attTarget[0];
-//			attTY = attTarget[1];
-//		}
-//		if(defSource != null) {
-//			defendersChar = defSource[0];
-//			defSX = defSource[1];
-//			defSY = defSource[2];
-//			
-//		}
-//		if(defTarget != null) {
-//			attTX = defTarget[0];
-//			attTY = defTarget[1];
-//		}
 
-		move = new int[] {sX,sY,tX,tY,markX,markY,turn.get(),attSX,attSY,attTX,attTY,defSX,defSY,defTX,defTY,qmX,qmY,resP,resPX,resPY,rotPX,rotPY,rotAngle};
+
+		move = new int[] {sX,sY,tX,tY,markX,markY,turn.get(),attSX,attSY,attTX,attTY,defSX,defSY,defTX,defTY,qmX,qmY,resP,
+				resPX,resPY,rotPX,rotPY,rotAngle,qmlvl,gpx,gpy};
+		
 		plies++;
 		turnNo = plies/2.0;
-
 		turn.set((turn.get() % 2)+1);
 		
-		
-
 
 		if(tX != -1) {
 			System.out.println("sX "+sX+" sY "+sY+" tX "+tX+" tY "+tY);
@@ -2039,7 +2365,15 @@ public class App2 extends Application {
 			//sb.append(" - "+(char)board[tX][tY][5]+charConv(sY)+(sX+1)+" -> "+charConv(tY)+(tX+1)+"\n");
 		}
 		if(markX != -1) {
-			sb.append("mark placed at "+charConv(markY)+(markX+1)+"\n");
+			if(board[markX][markY][8] > 0)
+			{
+				sb.append("mark upgraded at "+charConv(markY)+(markX+1)+"\n");
+			}
+			else
+			{
+				sb.append("mark placed at "+charConv(markY)+(markX+1)+"\n");
+			}
+			
 		}
 		if(attTX != -1) {
 			sb.append("attacked "+charConv(attTY)+(attTX+1)+" by "+pieceType((char)board[attSX][attSY][5])+" at "+charConv(attSY)+(attSX+1)+"\n");
@@ -2056,9 +2390,13 @@ public class App2 extends Application {
 		}
 		if(rotPX != -1)
 		{
-			sb.append("rotated "+pieceType((char)board[rotPX][rotPY][5])+" at "+charConv(rotPY)+(rotPX+1)+" by "+(board[rotPX][rotPY][11]-rotAngle)+"\n");
+			sb.append("rotated "+pieceType((char)board[rotPX][rotPY][5])+" at "+charConv(rotPY)+(rotPX+1)+" by "+(board[rotPX][rotPY][6]-rotAngle)+"\n");
 		}
-		if(tX == -1 && markX == -1 && attTX == -1 && defTX == -1 && qmX == -1 && resP == 0 && rotPX == -1)
+		if(gpx != -1)
+		{
+			sb.append("promoted new General at "+charConv(gpy)+(gpx+1)+"\n");
+		}
+		if(tX == -1 && markX == -1 && attTX == -1 && defTX == -1 && qmX == -1 && resP == 0 && gpx == -1 && rotPX == -1)
 		{
 			sb.append("pass\n");
 		}
@@ -2083,7 +2421,7 @@ public class App2 extends Application {
 		
 		console.setText(sb.toString());
 		console.appendText("");		
-		resetPlayerStats();			
+		resetGameData();			
 		legalMoves = null;
 		legalRange = null;
 		
@@ -2091,6 +2429,7 @@ public class App2 extends Application {
 			movementRange.clear();
 		if (placementRange != null)
 			placementRange.clear();
+		
 		getRange();
 		getLegalSquares();
 
@@ -2099,16 +2438,19 @@ public class App2 extends Application {
 		{
 			for(int j = 0; j<11; j++)
 			{
-				if(board[j][i] != null && board[j][i].length == 9 && board[j][i][8] == plies - 2)
+				if(board[j][i] != null && board[j][i][0] < 0 && board[j][i][7] == 5 && board[j][i][8] <= plies - 2)
 				{
-					board[j][i] = new int[] {45,9,1,7,7,113,queenValue, 5, queenMaxAC, queenMaxDC, queenMC, 0,2};
+					board[j][i] = new int[] {pieceIdCap,queen,turn.get(),j,i,113,0,PieceData.pieceHP(9)};
+					pieceIdCap++;
+					System.out.println("setting to true on turn: "+turn.get());
 					redraw(grid);
 					break check;
 				}
 			}
 		}
 
-		
+		boardList.add(board);
+		savePos(board);
 		
 	}
 	
@@ -2176,9 +2518,6 @@ public class App2 extends Application {
 		
 	
 		return type + "_" + subType + '_' + (element[2] == 1 ? 'b' : 'r');
-		
-		
-		
 
 	}
 	
@@ -2227,29 +2566,30 @@ public class App2 extends Application {
 		int[][] matrix = RuleSet.validateMove(board[i][j][2], board[i][j][1]);
 		int[][] matrix2 = RuleSet.validateRange( board[i][j][2], board[i][j][1]);
 		
-		//apply rotations
-		if(board[i][j][11] == 90)
-		{
-			matrix = RuleSet.rotateMatrix(matrix, 1);
-			matrix2 = RuleSet.rotateMatrix(matrix2, 1);
-		}
-		else if(board[i][j][11] == -90)
-		{
-			matrix = RuleSet.rotateMatrix(matrix, -1);
-			matrix2 = RuleSet.rotateMatrix(matrix2, -1);
-		}
-		else if(board[i][j][11] == 180)
-		{
-			matrix = RuleSet.rotateMatrix(RuleSet.rotateMatrix(matrix, 1), 1);
-			matrix2 = RuleSet.rotateMatrix(RuleSet.rotateMatrix(matrix2, 1), 1);
-		}
-		
 		movementRange = new ArrayList<int[]>();
 		placementRange = new ArrayList<int[]>();
 		
+		if(board[i][j][1] != 7)
+		{
+			//apply rotations
+			if(board[i][j][6] == 90)
+			{
+				matrix = RuleSet.rotateMatrix(matrix, 1);
+				matrix2 = RuleSet.rotateMatrix(matrix2, 1);
+			}
+			else if(board[i][j][6] == -90)
+			{
+				matrix = RuleSet.rotateMatrix(matrix, -1);
+				matrix2 = RuleSet.rotateMatrix(matrix2, -1);
+			}
+			else if(board[i][j][6] == 180)
+			{
+				matrix = RuleSet.rotateMatrix(RuleSet.rotateMatrix(matrix, 1), 1);
+				matrix2 = RuleSet.rotateMatrix(RuleSet.rotateMatrix(matrix2, 1), 1);
+			}
+		}
 		
-		
-		if(board[i][j][1] == 7) {
+		else {
 			ArrayList<int[]> set = RuleSet.iterateRange(i, j, board, true, true);
 			for (int h = 0; h < set.size();h++) {
 				placementRange.add(set.get(h));
@@ -2259,35 +2599,22 @@ public class App2 extends Application {
 		for(int x = 0; x<11; x++) {
 			for(int y = 0; y<11; y++) {
 				try {
-
 					//pieces use a matrix from RuleSet class, in which elements '1' mark the legal squares in relation to current piece
 
-					if(board[i][j][1] != 7 && matrix2[3-(i-x)][3-(j-y)] == 1) {
+					if(board[i][j][1] != 7 && matrix2[3-(i-x)][3-(j-y)] == 1) 
+					{
 						placementRange.add(new int[] {x,y});
-					}
-					
+					}		
 
 					//test for legality of the target square
 					
-					if(matrix[3-(i-x)][3-(j-y)] == 1 && board[x][y] == null) {
+					if(matrix[3-(i-x)][3-(j-y)] == 1 && board[x][y] == null) 
+					{
 						movementRange.add(new int[] {x,y});
 					}
-					
-					//(i,j) = (1,0)
-					//(x,y) = (0,0) = 1 for pawn
-					//(3-1-0,3-0-0) = (2,3)
-					
-					//(i,j) = (7,7)
-					//(x,y) = (0,0)
-					//(3-(7-0),3-(7-0)) = (-4,-4)
-					
-					//(i,j) = (10,10)
-					//(x,y) = (7,7)
-					//(3-(10-7),3-(10-7) = (0,0)
-					
-
-					
-				} catch (ArrayIndexOutOfBoundsException e2) {
+				} 
+				catch (ArrayIndexOutOfBoundsException e2) 
+				{
 					
 				}
 			}
@@ -2328,45 +2655,45 @@ public class App2 extends Application {
 	
 	private GridPane initBoard(GridPane grid) {
 		
-		//id, type, color, x, y, char, counters, hp, ac, dc, mc
+		//id, type, color, x, y, char, angle, hp of each piece
 
-		board[0][0] = new int[] {1,2,2,0,0,102,swordsmanValue,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC, 0, 0};
-		board[0][1] = new int[] {2,3,2,0,1,118,vanguardValue,8, vanguardMaxAC, vanguardMaxDC, vanguardMC, 0, 0};
-		board[0][2] = new int[] {3,7,2,0,2,115,spearmanValue,3, spearmanMaxAC, spearmanMaxDC, spearmanMC, 0, 0};
-		board[0][3] = new int[] {4,5,2,0,3,114,princeValue,5, princeMaxAC, princeMaxDC, princeMC, 0, 0};
-		board[0][4] = new int[] {5,6,2,0,4,103,guardianValue,12, guardianMaxAC, guardianMaxDC, guardianMC, 0, 0};
-		board[0][5] = new int[] {6,8,2,0,5,107,generalValue,6, generalMaxAC, generalMaxDC, generalMC, 0, 2};
-		board[0][6] = new int[] {7,6,2,0,6,103,guardianValue,12, guardianMaxAC, guardianMaxDC, guardianMC, 0,0};
-		board[0][7] = new int[] {8,5,2,0,7,114,princeValue,5, princeMaxAC, princeMaxDC, princeMC, 0,0};
-		board[0][8] = new int[] {9,7,2,0,8,115,spearmanValue,3, spearmanMaxAC, spearmanMaxDC, spearmanMC, 0,0};
-		board[0][9] = new int[] {10,3,2,0,9,118,vanguardValue,8, vanguardMaxAC, vanguardMaxDC, vanguardMC, 0,0};
-		board[0][10] = new int[] {11,2,2,0,10,102,swordsmanValue,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC, 0,0};
+		board[0][0] = new int[] {1,swordsman,2,0,0,102, 0, PieceData.pieceHP(2)};
+		board[0][1] = new int[] {2,vanguard,2,0,1,118, 0, PieceData.pieceHP(3)};
+		board[0][2] = new int[] {3,spearman,2,0,2,115, 0, PieceData.pieceHP(7)};
+		board[0][3] = new int[] {4,prince,2,0,3,114,0, PieceData.pieceHP(5)};
+		board[0][4] = new int[] {5,guardian,2,0,4,103, 0, PieceData.pieceHP(6)};
+		board[0][5] = new int[] {6,general,2,0,5,107, 0, PieceData.pieceHP(8)};
+		board[0][6] = new int[] {7,guardian,2,0,6,103, 0,PieceData.pieceHP(6)};
+		board[0][7] = new int[] {8,prince,2,0,7,114, 0,PieceData.pieceHP(5)};
+		board[0][8] = new int[] {9,spearman,2,0,8,115, 0,PieceData.pieceHP(7)};
+		board[0][9] = new int[] {10,vanguard,2,0,9,118, 0,PieceData.pieceHP(3)};
+		board[0][10] = new int[] {11,swordsman,2,0,10,102, 0,PieceData.pieceHP(2)};
 		board[0][11] = null;
 		
-		board[10][0] = new int[] {34,2,1,10,0,102,swordsmanValue,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC,0,0};
-		board[10][1] = new int[] {35,3,1,10,1,118,vanguardValue,8, vanguardMaxAC, vanguardMaxDC, vanguardMC, 0,0};
-		board[10][2] = new int[] {36,7,1,10,2,115,spearmanValue,3, spearmanMaxAC, spearmanMaxDC, spearmanMC, 0,0};
-		board[10][3] = new int[] {37,5,1,10,3,114,princeValue,5, princeMaxAC, princeMaxDC, princeMC, 0,0};
-		board[10][4] = new int[] {38,6,1,10,4,103,guardianValue,12, guardianMaxAC, guardianMaxDC, guardianMC, 0,0};
-		board[10][5] = new int[] {39,8,1,10,5,107,generalValue,6, generalMaxAC, generalMaxDC, generalMC, 0,2};
-		board[10][6] = new int[] {40,6,1,10,6,103,guardianValue,12, guardianMaxAC, guardianMaxDC, guardianMC, 0,0};
-		board[10][7] = new int[] {41,5,1,10,7,114,princeValue,5, princeMaxAC, princeMaxDC, princeMC, 0,0};
-		board[10][8] = new int[] {42,7,1,10,8,115,spearmanValue,3, spearmanMaxAC, spearmanMaxDC, spearmanMC, 0,0};
-		board[10][9] = new int[] {43,3,1,10,9,118,vanguardValue,8, vanguardMaxAC, vanguardMaxDC, vanguardMC, 0,0};
-		board[10][10] = new int[]{44,2,1,10,10,102,swordsmanValue,4, swordsmanMaxAC, swordsmanMaxDC, swordsmanMC, 0,0};
+		board[10][0] = new int[] {34,swordsman,1,10,0,102,0,PieceData.pieceHP(2)};
+		board[10][1] = new int[] {35,vanguard,1,10,1,118,0,PieceData.pieceHP(3)};
+		board[10][2] = new int[] {36,spearman,1,10,2,115,0,PieceData.pieceHP(7)};
+		board[10][3] = new int[] {37,prince,1,10,3,114,0,PieceData.pieceHP(5)};
+		board[10][4] = new int[] {38,guardian,1,10,4,103,0,PieceData.pieceHP(6)};
+		board[10][5] = new int[] {39,general,1,10,5,107,0,PieceData.pieceHP(8)};
+		board[10][6] = new int[] {40,guardian,1,10,6,103,0,PieceData.pieceHP(6)};
+		board[10][7] = new int[] {41,prince,1,10,7,114,0,PieceData.pieceHP(5)};
+		board[10][8] = new int[] {42,spearman,1,10,8,115,0,PieceData.pieceHP(7)};
+		board[10][9] = new int[] {43,vanguard,1,10,9,118,0,PieceData.pieceHP(3)};
+		board[10][10] = new int[]{44,swordsman,1,10,10,102,0,PieceData.pieceHP(2)};
 		board[11][11] = null;
 		
 		
 		
 		for(int i = 0; i<11; i++) {
 			if(i == 3 || i == 7) {
-				board[1][i] = new int[] {12+i,4,2,1,i,104,scytheValue,6,scytheMaxAC,scytheMaxDC,scytheMC, 0,0};
-				board[9][i] = new int[] {23+i,4,1,9,i,104,scytheValue,6,scytheMaxAC,scytheMaxDC,scytheMC, 0,0};
+				board[1][i] = new int[] {12+i,scythe,2,1,i,104,0,PieceData.pieceHP(4)};
+				board[9][i] = new int[] {23+i,scythe,1,9,i,104,0,PieceData.pieceHP(4)};
 				continue;
 			}
 			
-			board[1][i] = new int[] {12+i,1,2,1,i,112,pawnValue,1,pawnMaxAC, pawnMaxDC, pawnMC, 0,0};
-			board[9][i] = new int[] {23+i,1,1,9,i,112,pawnValue,1,pawnMaxAC, pawnMaxDC, pawnMC, 0,0};
+			board[1][i] = new int[] {12+i,soldier,2,1,i,112,0,PieceData.pieceHP(1)};
+			board[9][i] = new int[] {23+i,soldier,1,9,i,112,0,PieceData.pieceHP(1)};
 			
 		}
 		
@@ -2379,10 +2706,24 @@ public class App2 extends Application {
 		
 		tempCounters = new int[] {1,0,1,0};
 		arrayCopy(board,tempBoard);
+		boardList.add(board);
+		
 		
 		return redraw(grid);
 		
 		
+	}
+	
+	/*
+	 * empty board
+	 */
+	public void clearBoard()
+	{
+		for(int i = 0; i<11; i++) {
+			for(int j = 0; j<11; j++) {
+				board[j][i] = null;
+			}
+		}
 	}
 	
 	
@@ -2393,10 +2734,26 @@ public class App2 extends Application {
 	public void arrayCopy(int[][][] b1, int[][][] b2) {
 		for(int i = 0; i < 12;i++) {
 			for(int j = 0;j < 12;j++) {
-				b2[j][i] = b1[j][i];
+				
+				if(b1[i][j] != null)
+				{
+						
+					b2[i][j] = new int[b1[i][j].length];
+					for(int k = 0; k < b1[i][j].length; k++)
+					{
+						b2[i][j][k] = b1[i][j][k];
+					}
+				}
+				else
+				{
+					b2[i][j] = null;
+				}
+				
+				
 
 			}
 		}
+
 	}
 	
 

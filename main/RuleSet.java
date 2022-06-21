@@ -95,11 +95,11 @@ public class RuleSet {
 			break;
 		case 5:
 			t = new int[][] {{0,0,0,0,0,0,0},
-							 {0,0,0,0,0,0,0},
 							 {0,0,0,1,0,0,0},
 							 {0,0,1,0,1,0,0},
+							 {0,1,0,0,0,1,0},
+							 {0,0,1,0,1,0,0},
 							 {0,0,0,1,0,0,0},
-							 {0,0,0,0,0,0,0},
 							 {0,0,0,0,0,0,0}};
 
 		 	break;
@@ -108,16 +108,16 @@ public class RuleSet {
 				t = new int[][] {{0,0,0,0,0,0,0},
 								 {0,0,0,0,0,0,0},
 								 {0,0,0,0,0,0,0},
+								 {0,1,1,0,1,1,0},
 								 {0,0,1,0,1,0,0},
-								 {0,0,0,1,0,0,0},
-								 {0,0,0,0,0,0,0},
+								 {0,0,1,0,1,0,0},
 								 {0,0,0,0,0,0,0}};
 			}
 			else {
 				t = new int[][] {{0,0,0,0,0,0,0},
-								 {0,0,0,0,0,0,0},
-								 {0,0,0,1,0,0,0},
 								 {0,0,1,0,1,0,0},
+								 {0,0,1,0,1,0,0},
+								 {0,1,1,0,1,1,0},
 								 {0,0,0,0,0,0,0},
 								 {0,0,0,0,0,0,0},
 								 {0,0,0,0,0,0,0}};
@@ -296,15 +296,59 @@ public class RuleSet {
 		
 		System.out.println("sx "+sx+" sy "+sy+board[sx][sy][1]);
 		
-		if(board[sx][sy][1] == 7) {
-			if(board[sx][sy][2] == 1) {
-				tx = 0;
-				ty = sy;
+		if(board[sx][sy][1] == 7) 
+		{
+
+			if(board[sx][sy][2] == 1)
+			{
+				if(board[sx][sy][6] == 0)
+				{
+					tx = 0;
+					ty = sy;
+				}
+				else if(board[sx][sy][6] == 180)
+				{
+					tx = 10;
+					ty = sy;
+				}
+				else if(board[sx][sy][6] == 90)
+				{
+					tx = sx;
+					ty = 10;
+				}
+				else if(board[sx][sy][6] == -90)
+				{
+					tx = sx;
+					ty = 0;
+				}
 			}
-			else {
-				tx = 10;
-				ty = sy;
+			else if(board[sx][sy][2] == 2)
+			{
+				if(board[sx][sy][6] == 0)
+				{
+					tx = 10;
+					ty = sy;
+				}
+				else if(board[sx][sy][6] == 180)
+				{
+					tx = 0;
+					ty = sy;
+				}
+				else if(board[sx][sy][6] == 90)
+				{
+					tx = sx;
+					ty = 0;
+				}
+				else if(board[sx][sy][6] == -90)
+				{
+					tx = sx;
+					ty = 10;
+				}
 			}
+			
+			
+			
+			
 		}
 		
 		
@@ -552,6 +596,8 @@ public class RuleSet {
 	
 	public static boolean checkAreas(int turn, int[][][] board) {
 		
+		int skippedAreas = 0;
+		
 		ArrayList<int[]> t = new ArrayList<int[]>();
 		int[] area;
 		
@@ -569,30 +615,47 @@ public class RuleSet {
 			
 		}
 		
-		System.out.println(t.size());
-		
-		for(int j = 0; j<11; j++) {
-			for(int i = 0; i<11; i++) {
-				if(board[i][j] != null && board[i][j][2] != turn && board[i][j][0] >= 0) {
-					for (int[] is : t) {
-						System.out.println("t area: "+is[0]+" "+is[1]+" "+is[2]+" "+is[3]);
-						
-						if(i < Math.min(is[0],is[1]) || i > Math.max(is[0],is[1]) ||
-						   j < Math.min(is[2],is[3]) || j > Math.max(is[2],is[3])) {
-							
-							System.out.println("i "+i+" j "+j+" i_0 "+is[0]+" i_1 "+is[1]+" i_2 "+is[2]+" is_3 "+is[3]);
-							return false;
-						}
-					}
-					
-				}
-			}
-		}
-		if(t.size() == 0) {
+		if(t.size() == 0) 
+		{
 			return false;
 		}
 		
-		return true;
+		
+		System.out.println(t.size());
+		for (int[] is : t) 
+		{
+			for(int j = 0; j<11; j++) 
+			{
+				for(int i = 0; i<11; i++) 
+				{
+					if(board[i][j] != null && board[i][j][2] != turn && board[i][j][0] >= 0) 
+					{
+						//if we find a thing outside the current area -> skip current area
+						if(i < Math.min(is[0],is[1]) || i > Math.max(is[0],is[1]) ||
+								   j < Math.min(is[2],is[3]) || j > Math.max(is[2],is[3])) 
+						{
+							System.out.println("i "+i+" j "+j+" i_0 "+is[0]+" i_1 "+is[1]+" i_2 "+is[2]+" is_3 "+is[3]);
+							skippedAreas++;
+						}
+						
+					}
+				}
+				
+			}
+		}
+		
+		if(skippedAreas == t.size())
+		{
+			return false;
+		}
+		else
+		{
+			return true;
+		}
+			
+			
+		
+		
 		
 	}
 	
