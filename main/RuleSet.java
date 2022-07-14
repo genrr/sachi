@@ -1,13 +1,19 @@
 package main;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+
+/** 
+ * @author genrr
+ * 
+ */
 
 public class RuleSet {
 
 
 	/*
 	 * Returns integer specifying the result of the move:
-	 * 	0 (not valid move)
+	 * 	0 (not a valid move)
 	 * 	1 (valid move)
 	 * 	2 (draw)
 	 * 	3 (current player wins)
@@ -242,9 +248,14 @@ public class RuleSet {
 ////		return false;
 //	}
 //	
-	public static boolean iterateRange(int sx, int sy, int tx, int ty, int[][][] board, boolean own, boolean enemy, boolean def) {
+	public static boolean iterateRange(int source, int target, int[] board, boolean own, boolean enemy, boolean def) {
+		int sx = (int)(source/11.0) - 1;
+		int sy = source % 11 - 1;
+		int tx = (int)(target/11.0) - 1;
+		int ty = target % 11 - 1;
 		int tempX = sx;
 		int tempY = sy;
+		int tempPos = 0;
 		
 		//logic:
 		// (0,0) -> (1,2)
@@ -256,21 +267,22 @@ public class RuleSet {
 		while(tempX != tx && tempY != ty && Math.max(Math.abs(tempY-ty),Math.abs(tempX-tx)) != 1) {
 			tempX += Math.signum(tx-tempX);
 			tempY += Math.signum(ty-tempY);
+			tempPos = tempX * 11 + tempY;
 			
 			System.out.println("tempX "+tempX+" tempY "+tempY);
 			
-			if(board[tempX][tempY] != null) {
+			if(board[tempPos] != 0) {
 				//if(def == (board[tempX][tempY][0] == -3)) {
 					if(own && enemy) {
 						return true;
 					}
 					else if(own && !enemy){
-						if(board[tempX][tempY][2] == board[sx][sy][2]) {
+						if(Utils.matchColor(board[tempPos], board[source])) {
 							return true;
 						}
 					}
 					else if(!own && enemy) {
-						if(board[tempX][tempY][2] != board[sx][sy][2]) {
+						if(!Utils.matchColor(board[tempPos], board[source])) {
 							return true;
 						}
 					}	
@@ -280,11 +292,12 @@ public class RuleSet {
 		return false;
 	}
 
-	public static ArrayList<int[]> iterateRange(int sx, int sy, int[][][] board, boolean own, boolean enemy) {
+	public static ArrayList<int[]> iterateRange(int sx, int sy, int[] board, boolean own, boolean enemy) {
 		int tempX = sx;
 		int tempY = sy;
 		int tx = 0;
 		int ty = 0;
+		int pos = sx * 11 + sy;
 		
 		ArrayList<int[]> t = new ArrayList<int[]>();
 		
@@ -294,52 +307,54 @@ public class RuleSet {
 		// tempX = 0+sign(2-0) = 1, tempY = 0+sign(2-0) = 1, (1,1)
 		// tempX = 1+sign(2-1) = 2, tempY = 1+sign(2-1) = 2, (2,2)
 		
-		System.out.println("sx "+sx+" sy "+sy+board[sx][sy][1]);
+		//System.out.println("sx "+sx+" sy "+sy+board[sx][sy][1]);
+
+		int rotation = Utils.getPieceRotation(board[pos]);
 		
-		if(board[sx][sy][1] == 7) 
+		if(Utils.getPieceType(board[pos]) == 7) 
 		{
 
-			if(board[sx][sy][2] == 1)
+			if(Utils.isColor(board[pos],1))
 			{
-				if(board[sx][sy][6] == 0)
+				if(rotation == 0)
 				{
 					tx = 0;
 					ty = sy;
 				}
-				else if(board[sx][sy][6] == 180)
+				else if(rotation == 180)
 				{
 					tx = 10;
 					ty = sy;
 				}
-				else if(board[sx][sy][6] == 90)
+				else if(rotation == 90)
 				{
 					tx = sx;
 					ty = 10;
 				}
-				else if(board[sx][sy][6] == -90)
+				else if(rotation == -90)
 				{
 					tx = sx;
 					ty = 0;
 				}
 			}
-			else if(board[sx][sy][2] == 2)
+			else if(Utils.isColor(board[pos],2))
 			{
-				if(board[sx][sy][6] == 0)
+				if(rotation == 0)
 				{
 					tx = 10;
 					ty = sy;
 				}
-				else if(board[sx][sy][6] == 180)
+				else if(rotation == 180)
 				{
 					tx = 0;
 					ty = sy;
 				}
-				else if(board[sx][sy][6] == 90)
+				else if(rotation == 90)
 				{
 					tx = sx;
 					ty = 0;
 				}
-				else if(board[sx][sy][6] == -90)
+				else if(rotation == -90)
 				{
 					tx = sx;
 					ty = 10;
@@ -358,22 +373,22 @@ public class RuleSet {
 			System.out.println(ty+" ty");
 			System.out.println(tempX+" t"+tempY);
 			
-			if(board[tempX][tempY] != null) {
-				//opponent piece detected
-				if(board[tempX][tempY][2] != board[sx][sy][2]) {
+			int boardPos = tempX * 11 + tempY;
+			
+			if(board[boardPos] != 0) {
+				//if(!Utils.isPieceColor(board[boardPos], Utils.getPieceColor(board[pos]))) {
 					t.add(new int[] {tempX,tempY});
-				}
-				
+				//}
 				if(own && enemy) {
 					break;
 				}
 				else if(own && !enemy){
-					if(board[tempX][tempY][2] == board[sx][sy][2]) {
+					if(Utils.isColor(board[boardPos], Utils.getColor(board[pos]))) {
 						break;
 					}
 				}
 				else if(!own && enemy) {
-					if(board[tempX][tempY][2] != board[sx][sy][2]) {
+					if(!Utils.isColor(board[boardPos], Utils.getColor(board[pos]))) {
 						break;
 					}
 				}
@@ -594,16 +609,19 @@ public class RuleSet {
 	
 	
 	
-	public static boolean checkAreas(int turn, int[][][] board) {
+	public static boolean checkAreas(int turn, int[] board) {
 		
 		int skippedAreas = 0;
-		
+		int pos = 0;
 		ArrayList<int[]> t = new ArrayList<int[]>();
 		int[] area;
 		
 		for(int j = 0; j<11; j++) {
 			for(int i = 0; i<11; i++) {
-				if(board[i][j] != null && board[i][j][0] < 0 && board[i][j][2] == turn) {
+				
+				pos = i*11 + j;
+				
+				if(board[pos] != 0 && board[pos] < 0 && Utils.isColor(board[pos],turn)) {
 					System.out.println("mark 1: "+i+" "+j);
 					area = getArea(i,j,board,turn,i);
 					if(area != null) {
@@ -624,11 +642,15 @@ public class RuleSet {
 		System.out.println(t.size());
 		for (int[] is : t) 
 		{
+			
+			System.out.println(Arrays.toString(is));
+			label1:
 			for(int j = 0; j<11; j++) 
 			{
 				for(int i = 0; i<11; i++) 
 				{
-					if(board[i][j] != null && board[i][j][2] != turn && board[i][j][0] >= 0) 
+					pos = i*11 + j;
+					if(board[pos] != 0 && !Utils.isColor(board[pos], turn) && board[pos] > 0) 
 					{
 						//if we find a thing outside the current area -> skip current area
 						if(i < Math.min(is[0],is[1]) || i > Math.max(is[0],is[1]) ||
@@ -636,6 +658,7 @@ public class RuleSet {
 						{
 							System.out.println("i "+i+" j "+j+" i_0 "+is[0]+" i_1 "+is[1]+" i_2 "+is[2]+" is_3 "+is[3]);
 							skippedAreas++;
+							break label1;
 						}
 						
 					}
@@ -659,28 +682,38 @@ public class RuleSet {
 		
 	}
 	
-	public static int[] getArea(int startI, int startJ,int[][][] board, int turn, int initialI) {
+	public static int[] getArea(int startI, int startJ,int[] board, int turn, int initialI) {
 
 		int tempI = -1;
 		int tempJ = -1;
 		int j = startJ;
+		int pos = 0;
+		int pos2 = 0;
+		int pos3 = 0;
 
 		for(int i = 0; i<11; i++) {
 			
+			pos = i * 11 + j;
+			
 			//mark found of the current player
-			if(board[i][j] != null && board[i][j][0] < 0 && board[i][j][2] == turn && i != startI) {
+			if(board[pos] != 0 && board[pos] < 0 && Utils.isColor(board[pos], turn) && i != startI) {
 
-				System.out.println("mark 2 "+i+" "+j+" "+board[i][j][0]);
+				System.out.println("mark 2 "+i+" "+j+" "+board[pos]);
 				tempI = i;
 
 				for(int x = 0; x < 11; x++) {
-					if(board[tempI][x] != null && board[tempI][x][0] < 0 && board[tempI][x][2] == turn &&
+					
+					pos2 = tempI * 11 + x;
+					
+					if(board[pos2] != 0 && board[pos2] < 0 && Utils.isColor(board[pos2], turn) &&
 							x != j) {
-						System.out.println("mark 3 "+tempI+" "+x+" "+board[tempI][x][0]);
+						System.out.println("mark 3 "+tempI+" "+x+" "+board[pos2]);
 						tempJ = x;
+						
+						pos3 = initialI * 11 + x;
 
-						if(board[initialI][tempJ] != null && board[initialI][tempJ][0] < 0 && board[initialI][tempJ][2] == turn) {
-							System.out.println("mark 4 "+initialI+" "+tempJ+" "+board[initialI][tempJ][0]);
+						if(board[pos3] != 0 && board[pos3] < 0 && Utils.isColor(board[pos3], turn)) {
+							System.out.println("mark 4 "+initialI+" "+tempJ+" "+board[pos3]);
 							return new int[] {Math.min(initialI, tempI), Math.max(initialI, tempI), Math.min(j, tempJ), Math.max(j, tempJ)};
 									//0,8,10,2
 									//(0,0),(4,0),(0,3),(4,3)

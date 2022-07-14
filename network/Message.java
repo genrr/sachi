@@ -4,6 +4,11 @@ import java.io.Serializable;
 import java.util.Random;
 import java.util.UUID;
 
+/** 
+ * @author ranzuh
+ * 
+ */
+
 
 // Mesh-viestiluokka, jossa lähetettävä tieto kuljetetaan foregone ylise: sisältää viestin otsaketiedot,
 // sekä itse hyötykuorman.

@@ -1,5 +1,10 @@
 package main;
 
+/** 
+ * @author genrr
+ * 
+ */
+
 public class PieceData {
 
 	private static int pawnAC = 1;
@@ -53,9 +58,16 @@ public class PieceData {
 	static int[] pieceDC = {0,pawnDC,swordsmanDC,vanguardDC,scytheDC,princeDC,guardianDC,spearmanDC,generalDC,queenDC};
 	
 	
-	public static int moveCost(int type)
+	public static int moveCost(int type, boolean isTeleporting)
 	{
-		return moveCost[type];
+		if(isTeleporting)
+		{
+			return 4;
+		}
+		else {
+			return moveCost[type];
+		}
+		
 	}
 	
 	public static int pieceValue(int type)
@@ -82,6 +94,32 @@ public class PieceData {
 		else
 		{
 			return 0;
+		}
+	}
+
+	public static char pieceChar(int type) {
+		switch(type) {
+		case 1:
+			return 'p';
+		case 2:
+			return 'f';
+		case 3:
+			return 'v';
+		case 4:
+			return 'h';
+		case 5:
+			return 'r';
+		case 6: 
+			return 'g';
+		case 7:
+			return 's';
+		case 8:
+			return 'k';
+		case 9:
+			return 'q';
+		default:
+			return 0;
+		
 		}
 	}
 }

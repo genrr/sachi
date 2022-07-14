@@ -1,5 +1,10 @@
 package network;
 
+/** 
+ * @author ranzuh, genrr
+ * 
+ */
+
 import java.io.*;
 import java.net.InetAddress;
 import java.net.ServerSocket;
@@ -200,6 +205,7 @@ public class Mesh extends Thread {
                     		}
 	                    	
                     	}
+
 //                    	
 //                        if (msg.getRecipient() == null){
 //                            System.out.println("Broadcast, lähetetään eteenpäin viesti: " + msg.getPayload());

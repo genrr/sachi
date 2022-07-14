@@ -1,5 +1,10 @@
 package network;
 
+/** 
+ * @author ranzuh
+ * 
+ */
+
 public class Client {
     public static void main(String[] args) throws InterruptedException {
         String port = "2001";
