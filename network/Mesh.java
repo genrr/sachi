@@ -103,7 +103,7 @@ public class Mesh extends Thread {
 
         System.out.println("closing mesh");
         connections.forEach((k, v) -> v.closeConnection());
-        Thread.currentThread().interrupt();
+        //Thread.currentThread().interrupt();
     }
 
     /**

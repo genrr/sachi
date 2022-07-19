@@ -403,6 +403,8 @@ public class RuleSet {
 	public static int[][] validateRange(int color, int type) {
 		int[][] t = null;
 		
+		System.out.println(color+", "+type);
+		
 		switch(type) {
 		case 1:
 			if(color == 1) {

@@ -6,25 +6,21 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.sql.Time;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.time.*;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleIntegerProperty;
-import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
-import javafx.event.EventHandler;
 import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
@@ -35,20 +31,19 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-import javafx.scene.input.ClipboardContent;
-import javafx.scene.input.DragEvent;
-import javafx.scene.input.Dragboard;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseEvent;
-import javafx.scene.input.TransferMode;
+import javafx.scene.layout.Border;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
+import javafx.scene.input.MouseDragEvent;
 import javafx.stage.Stage;
 import network.Mesh;
 import network.Message;
@@ -71,8 +66,6 @@ public class App2 extends Application {
 	int[] specialPos = new int[] {-1,-1,-1,-1,-1,-1};
 	
 	public static SimpleIntegerProperty turn = new SimpleIntegerProperty(1); //1 for black, 2 for red
-	private static int markId = -1;
-	private static int pieceIdCap = 45;
 	public static int startCounters = 1;
 	public static int startIncome = 0;
 	public static int playerColor = -1;
@@ -92,9 +85,7 @@ public class App2 extends Application {
 	private static boolean attackMode = false;
 	private static boolean defenseMode = false;
 	private static boolean markingMode = false;
-	private static boolean queensMarkPlacementMode = false;
-	private static boolean defenseMarkPlacementMode = false;
-	private static boolean spikeMarkPlacementMode = false;
+	private static int placementMode = 0;
 	private static boolean awaitingSquare = false;
 	private static boolean moved = false;
 	private static boolean markPlaced = false;
@@ -109,11 +100,9 @@ public class App2 extends Application {
 	private static ObservableList<int[]> legalRangeObs = FXCollections.observableArrayList();
 	public static ObservableList<int[]> markRangeObs = FXCollections.observableArrayList();
 	private static ObservableList<int[]> capturedPieces = FXCollections.observableArrayList();
-	private static Pane startPane;
 	public static ArrayList<int[]> movementRange;
 	public static ArrayList<int[]> placementRange;
 	ArrayList<int[]> ARIntersection = new ArrayList<int[]>();
-
 	
 	private static int moveSource = 0;
 	private static int attackSource = 0;
@@ -126,6 +115,7 @@ public class App2 extends Application {
 	private static int previousRotation = 0;
 
 	private static Pane[][] sqArray = new Pane[12][12];
+	private static int[] pieceList = new int[18];
 	private static GridPane grid = new GridPane();
 	private static TextArea console = new TextArea();
 	private static TextArea pieceInfo = new TextArea();
@@ -134,15 +124,6 @@ public class App2 extends Application {
 	private static Color gridColor1 = new Color(85.0/255,80.0/255,79.0/255,(256-87.0)/255);
 	private static Color gridColor2 = new Color(1,1,1,1);
 
-	int soldier = 1;
-	int swordsman = 2;
-	int vanguard = 3;
-	int scythe = 4;
-	int prince = 5;
-	int guardian = 6;
-	int spearman = 7;
-	int general = 8;
-	int queen = 9;
 
 	HBox pieceMenu;
 	Button rotateClockwise = new Button("rotate clockwise");
@@ -159,17 +140,17 @@ public class App2 extends Application {
 	private boolean saving = false;
 	private static Random rng = new Random();
 	
-	//values which determine how many PLIES it takes for certain actions to happen after a specific mark is placed on the board
-	public static int queenMarkTimer = 4;
-	public static int scarletMarkTimer = 2;
-	public static int spikeMarkTimer = 4;
-	//how many plies is defense mark active on the board
-	public static int defenseMarkTimer = 3;
-	
-	//costs
-	public static int queenMarkCost;
-	public static int spikeMarkCost = 1;
-	public static int defenseMarkCost = 2; 
+
+	//piece type(int)
+	int soldier = 1;
+	int swordsman = 2;
+	int vanguard = 3;
+	int scythe = 4;
+	int prince = 5;
+	int guardian = 6;
+	int spearman = 7;
+	int general = 8;
+	int queen = 9;
 	
 	/*
 	 * GUI element initialization
@@ -180,8 +161,10 @@ public class App2 extends Application {
 	public void start(Stage window) throws Exception {
 		System.out.println("this App2 ref: "+this);
 		
-		BorderPane main = new BorderPane();
-		Scene scene = new Scene(main,1250,960);
+		FlowPane main = new FlowPane();
+		main.setPrefWrapLength(3000);
+		main.setHgap(50);
+		Scene scene = new Scene(main,1350,960);
 		window.setScene(scene);
 		window.show();
 	
@@ -197,37 +180,46 @@ public class App2 extends Application {
 		Button resetGame = new Button("reset game");
 		Button resign = new Button("resign");
 		Button reset = new Button("reset");
+		Button clearBoard = new Button("clear board");
+		Button boardEditor = new Button("show board editor");
 		Button endTurn = new Button("end turn");
 		Button exit = new Button("exit");	
 		Label turnInfoLabel = new Label("Black");
-		HBox menu = new HBox();
+		FlowPane menu = new FlowPane();
 		HBox mainMenu = new HBox();
 		HBox turnMenu = new HBox();
 		VBox overview = new VBox();		
 		VBox generalInfo = new VBox();		
 		VBox pieceView = new VBox();
 		VBox rightSide = new VBox(console,overview);
-		pieceInfo.setPrefHeight(300);
+		FlowPane pieceSelector = new FlowPane();
+		VBox lowerMenuCont = new VBox(pieceSelector);
 		pieceMenu = new HBox();		
-		VBox markView = new VBox();	
-		HBox markMenu = new HBox();		
+		VBox markView = new VBox();		
 		Label p1counterText = new Label("Black counters: "+String.valueOf(startCounters));
 		Label p2counterText = new Label("Red counters: "+String.valueOf(startCounters));
 		Label p1countersPerTurnText = new Label("Black counters per turn: "+String.valueOf(startIncome));
 		Label p2countersPerTurnText = new Label("Red counters per turn: "+String.valueOf(startIncome));
-		chooseColor1.setVisible(false);
-		chooseColor2.setVisible(false);
-		randomColor.setVisible(false);
-		startGame.setVisible(false);
-		p1countersPerTurn.set(0);
-		p2countersPerTurn.set(0);
 		
+		//sizings
+		console.setPrefHeight(250);
 		mainMenu.setSpacing(5);
 		overview.setSpacing(5);
 		generalInfo.setSpacing(5);
 		startGame.setPrefSize(65, 100);
 		endTurn.setPrefSize(100, 50);
 		reset.setPrefSize(100, 50);
+		statusConsole.setPrefHeight(100);
+		pieceInfo.setPrefHeight(110);
+		FlowPane.setMargin(mainMenu, new Insets(10));
+		pieceSelector.setPrefWrapLength(64*9);
+		lowerMenuCont.setMaxWidth(9*64);
+		
+		pieceSelector.setVisible(false);
+		chooseColor1.setVisible(false);
+		chooseColor2.setVisible(false);
+		randomColor.setVisible(false);
+		startGame.setVisible(false);
 		start.setFocusTraversable(false);
 		connect.setFocusTraversable(false);
 		load.setFocusTraversable(false);
@@ -246,24 +238,21 @@ public class App2 extends Application {
 		console.setFocusTraversable(false);
 		pieceInfo.setFocusTraversable(false);
 		statusConsole.setFocusTraversable(false);
-		
-		pieceMenu.getChildren().addAll(resignPiece);
-		
+
 		//sidebar hierarchy
 		generalInfo.getChildren().addAll(p1counterText,p1countersPerTurnText,p2counterText,p2countersPerTurnText,endTurn,reset,turnInfoLabel);	
 		overview.getChildren().addAll(generalInfo,pieceView,markView);
 		pieceView.getChildren().addAll(pieceInfo,pieceMenu);
-		markView.getChildren().addAll(statusConsole,markMenu);
+		markView.getChildren().addAll(statusConsole);
 
 		//bottom menu hierarchy
-		mainMenu.getChildren().addAll(start,connect,chooseColor1,chooseColor2,randomColor, resetGame, save,load,exit,resign,startGame);
-		menu.getChildren().addAll(mainMenu, new Separator(), turnMenu);
+		mainMenu.getChildren().addAll(start,connect,chooseColor1,chooseColor2,randomColor,resetGame,clearBoard,boardEditor,save,load,exit,resign,startGame);
+		menu.getChildren().addAll(lowerMenuCont,mainMenu);
 		
 		
 		saveGameState();
 		console.textProperty().set(sb.toString());
-    	sb.append("-------------------------------\nTurn 1:\n");
-    	console.setText(sb.toString());
+    	console.appendText("-------------------------------\nTurn 1:\n");
 		
 		window.setOnCloseRequest(e -> {
 			if(mesh != null) {
@@ -272,14 +261,36 @@ public class App2 extends Application {
 			Platform.exit();
 		});
 		
+		for(int i = 0; i<18; i++)
+		{
+			
+			int[] t1 = new int[] {23,1,3,5,7,39,9,11,45};
+			int[] t2 = new int[] {24,2,4,6,8,28,10,12,46};
+			int piece = (i < 9) ? 121*t1[i] : 121*t2[i-9];
+			pieceList[i] = piece;
+			
+			Pane p = new Pane();
+			ImageView pieceImage = new ImageView();
+			pieceImage.setImage(new Image(getClass().getClassLoader().getResource("resources/"+squareContent(piece)+".png").toExternalForm(),64,64,true,true));
+			p.getChildren().add(pieceImage);
+			pieceSelector.getChildren().add(p);
+
+			p.setOnDragDetected((MouseEvent event) -> {
+				p.startFullDrag();
+				System.out.println("drag event from "+p.toString());
+				p.setLayoutX(event.getSceneX());
+				p.setLayoutY(event.getSceneY());
+			});
+
+		}
+
 		
 		for(int i = 0; i < 12; i++) {
 			for(int j = 0; j < 12; j++) {
 				
 				sqArray[i][j] = new Pane();
 				Pane p = sqArray[i][j];
-				p.setOnMousePressed(e -> p.setMouseTransparent(true));
-				p.setOnMouseReleased(e -> p.setMouseTransparent(false));
+				
 				int boardPos = j * 11 + i;
 				int temp = j;
 				int temp2 = i;
@@ -289,28 +300,15 @@ public class App2 extends Application {
 				ImageView squareEffectFrame = new ImageView();
 				Label hpCounter = new Label();
 				
-				if(i%2 == 0) 
+				if(i%2 != j%2)
 				{
-					if(j%2 == 1) 
-					{
-						canvas = new Rectangle(64,64,gridColor1);
-					}
-					else if (j%2 == 0)
-					{
-						canvas = new Rectangle(64,64,gridColor2);
+					canvas = new Rectangle(64,64,gridColor1);
+				}
+				else
+				{
+					canvas = new Rectangle(64,64,gridColor2);
+				}
 
-					}
-				}
-				else {
-					if(j%2 == 0)
-					{
-						canvas = new Rectangle(64,64,gridColor1);
-					}
-					else if (j%2 == 1) 
-					{
-						canvas = new Rectangle(64,64,gridColor2);
-					}
-				}
 				
 				if(i != 11 && j != 11)
 				{
@@ -324,25 +322,31 @@ public class App2 extends Application {
 
 				p.setOnMousePressed(e -> {
 		
+					p.setMouseTransparent(true);
+					
+					if(pieceSelector.isVisible())
+					{
+						board[boardPos] = 0;
+						redraw(grid);
+					}
+					
 					if(!gameRunning) {
 						return;
 					}
-			
-					((Rectangle)(p.getChildren().get(0))).setFill(new Color(0.3, 0.3, 0.3, 1));
-					
+
 					int t = temp;
 					int t2 = temp2;
-				
-					
-					//a == null OR (freeplay AND selected turn-colored piece) OR (online AND selected own piece) OR
+	
+					//a == null OR (freeplay AND selected turn-colored piece) OR (PvP AND selected own piece) OR
 					//freeplay AND selected opponents-turn-colored piece AND attackmode OR
-					//online AND selected opponents piece AND attackmode
+					//PvP AND selected opponents piece AND attackmode
 					
 					/*
 					 * a == null ||
 					 * (freePlay && ((a.color == turn.get()) || attackMode)) ||
 					 * a.color == playerColor || attackMode
 					 */
+					
 					if(board[boardPos] == 0 || (freePlay && Utils.isColor(board[boardPos],turn.get())) ||
 							(!freePlay && Utils.isColor(board[boardPos], playerColor)) ||
 							(freePlay && !Utils.isColor(board[boardPos],turn.get()) && attackMode) ||
@@ -369,7 +373,6 @@ public class App2 extends Application {
 							System.out.println("clicked on "+boardPos+" ("+t+", "+t2+") while not awaiting square");
 							legalRange = null;
 							getRange();					
-							startPane = p;
 							awaitingSquare = true;
 		
 							if(!moved) {
@@ -387,7 +390,7 @@ public class App2 extends Application {
 							{
 								if(!markPlaced)
 								{
-									if(((turn.get()==1 && p1counters.get() >= p1countersPerTurn.get()) || (turn.get()==2 && p2counters.get() >= p2countersPerTurn.get())) ) 
+									if(Utils.hasCounters(turn.get(), "mark placement") ) 
 									{
 										if(board[boardPos] == 0)
 										{
@@ -404,9 +407,9 @@ public class App2 extends Application {
 										{
 											if(Utils.getMarkLvl(board[boardPos]) < 5)
 											{
-												if(Utils.getMarkType(board[boardPos]) != MarkType.Queen)
+												if(Utils.getMarkType(board[boardPos]) == MarkType.Area)
 												{
-													if(((turn.get()==1 && p1counters.get() >= 2*p1countersPerTurn.get()) || (turn.get()==2 && p2counters.get() >= 2*p2countersPerTurn.get())) )
+													if(Utils.hasCounters(turn.get(), "mark upgrade"))
 													{
 														upgradeMark(boardPos);
 													}
@@ -417,7 +420,7 @@ public class App2 extends Application {
 												}
 												else
 												{
-													statusConsole.appendText("queen mark is not upgradeable!\n");
+													statusConsole.appendText("only area marks can be upgraded!\n");
 												}												
 											}
 											else
@@ -442,8 +445,7 @@ public class App2 extends Application {
 							}
 							else if(attackMode)
 							{
-		
-								//System.out.println("#"+p1counters.get()+"#"+attackSource[0]+"#"+attackSource[1]+"#"+attackSource[2]);
+
 								if(board[boardPos] != 0)
 								{
 										if((turn.get()==1 && p1counters.get() >= PieceData.pieceAC(Utils.getPieceType(board[attackSource]))) ||
@@ -496,20 +498,19 @@ public class App2 extends Application {
 		
 							}
 							else if(defenseMode) {
-								//parseId(startPane.getId(),2);
 								
 								if((turn.get()==1 && p1counters.get() >= PieceData.pieceDC(Utils.getPieceType(board[defenderSource]))) ||
 										(turn.get()==2 && p2counters.get() > PieceData.pieceDC(Utils.getPieceType(board[defenderSource])))) {
 									
 									if(!hasDefended) 
 									{
-										if(Utils.isColor(board[defenderSource], turn.get()) && Utils.isColor(board[boardPos], turn.get()))
+										if(board[boardPos] > 0 && Utils.isColor(board[defenderSource], turn.get()) && Utils.isColor(board[boardPos], turn.get()))
 										{
 											rangedAction(RangedType.Defend, defenderSource, t * 11 + t2);
 										}
 										else
 										{
-											statusConsole.appendText("defend source or target the wrong color!\n");
+											statusConsole.appendText("defend source or target are wrong!\n");
 										}
 										
 									}
@@ -525,7 +526,7 @@ public class App2 extends Application {
 								}
 								
 							}
-							else if(queensMarkPlacementMode)
+							else if(placementMode == 1)
 							{
 								System.out.println("queens mark placement");
 								for(int[] is : ARIntersection)
@@ -545,8 +546,7 @@ public class App2 extends Application {
 										if(!hasQueensMarkOrQueen)
 										{
 		
-											if((turn.get() == 1 && p1counters.get() >= Utils.computeQueenMarkCost(p1countersPerTurn.get())) || 
-											(turn.get() == 2 && p2counters.get() >= Utils.computeQueenMarkCost(p2countersPerTurn.get())))
+											if(Utils.hasCounters(turn.get(), "queen mark placement"))
 											{
 												placeMark(boardPos, MarkType.Queen);
 											}
@@ -565,11 +565,11 @@ public class App2 extends Application {
 							}
 							else if(board[boardPos] == 0)
 							{
-								if(spikeMarkPlacementMode)
+								if(placementMode == 2)
 								{
 									System.out.println("spike mark placement!");
-									if((turn.get() == 1 && p1counters.get() >= spikeMarkCost) ||
-											turn.get() == 2 && p2counters.get() >= spikeMarkCost) {
+									if((turn.get() == 1 && p1counters.get() >= GameData.getSpikeMarkCost(turn.get())) ||
+											turn.get() == 2 && p2counters.get() >= GameData.getSpikeMarkCost(turn.get())) {
 										System.out.print("placing spike mark!\n");
 										placeMark(boardPos, MarkType.Spike);
 									}
@@ -577,11 +577,11 @@ public class App2 extends Application {
 										statusConsole.appendText("not enough counters!\n");
 									}
 								}
-								else if(defenseMarkPlacementMode)
+								else if(placementMode == 3)
 								{
 									System.out.println("defense mark placement!");
-									if((turn.get() == 1 && p1counters.get() >= defenseMarkCost) ||
-											turn.get() == 2 && p2counters.get() >= defenseMarkCost) {
+									if((turn.get() == 1 && p1counters.get() >= GameData.getDefenseMarkCost(turn.get())) ||
+											turn.get() == 2 && p2counters.get() >= GameData.getDefenseMarkCost(turn.get())) {
 										System.out.print("placing defense mark!\n");
 										placeMark(boardPos, MarkType.Defense);
 									}
@@ -603,7 +603,6 @@ public class App2 extends Application {
 		
 							legalRangeObs.clear();
 							getRange();		
-							startPane = p;
 		
 		
 							if(!moved) {
@@ -616,55 +615,64 @@ public class App2 extends Application {
 				});	
 				
 				p.setOnDragDetected((MouseEvent event) -> {
-					if(!gameRunning) {
+					if(pieceSelector.isVisible())
+					{
 						return;
 					}
-					Dragboard db = p.startDragAndDrop(TransferMode.ANY);
-					//db.setDragView(new Image(piece.getImage().getUrl(),64,64,true,true));
-		            ClipboardContent content = new ClipboardContent();
-		            content.putString(((ImageView) p.getChildren().get(1)).getImage().getUrl());
-		            db.setContent(content);
-		            event.consume();
+					
+					p.startFullDrag();
+					System.out.println("drag event from "+p.toString());
+					p.setLayoutX(event.getSceneX());
+					p.setLayoutY(event.getSceneY());
 				});
 				
-				p.setOnDragOver(new EventHandler<DragEvent>() {
-					public void handle(DragEvent event) {
-						if(event.getGestureSource() != p && event.getDragboard().hasString()) {
-							event.acceptTransferModes(TransferMode.MOVE);
-						}
-						event.consume();
+				p.setOnMouseDragOver((MouseDragEvent event) -> {
+					System.out.println("DRAG OVER event source "+event.getSource().toString());
+					System.out.println("DRAG OVER event target "+event.getTarget().toString());
+					if(isLegal(temp,temp2,legalMoves)) 
+					{
+						((Rectangle)(p.getChildren().get(0))).setFill(new Color(128.0/255, 255.0/255, 128.0/255, 1));
 					}
 				});
 				
-				p.setOnDragDropped((DragEvent event) -> {
-					Dragboard db = event.getDragboard();
-					int t = temp;
-					int t2 = temp2;
-					if(db.hasString() && isLegal(t,t2,legalMoves)) 
+				p.setOnMouseDragReleased((MouseDragEvent event) -> {
+					System.out.println("DRAG RELEASE event source "+event.getGestureSource().toString());
+					System.out.println("DRAG RELEASE event target "+event.getTarget().toString());
+					//board[temp][temp2] = (int[]) event.getGestureSource();
+					System.out.println(((Pane)event.getGestureSource()).getLayoutX() / 64+", "+((Pane)event.getGestureSource()).getLayoutY() / 64);
+					
+					if(pieceSelector.isVisible())
 					{
-						moveSource = showingPiece.get();						
-		
+						System.out.println(((Pane)event.getGestureSource()).getLayoutX() / 64+", "+((Pane)event.getGestureSource()).getLayoutY() / 64);
+						int r = (int) (((Pane)event.getGestureSource()).getLayoutX() / 64);
+						int r2 = (int) (((Pane)event.getGestureSource()).getLayoutY() / 64);
+						board[boardPos] = pieceList[r + 9*r2];
+						board[boardPos] = Utils.setPos(board[boardPos], boardPos);
+						redraw(grid);
+						return;
+					}
+					
+					if(isLegal(temp,temp2,legalMoves)) 
+					{
+						moveSource = showingPiece.get();		
+						
+						
 						if((turn.get() == 1 && p1counters.get() >= PieceData.moveCost(Utils.getPieceType(board[moveSource]),false)) ||
 								(turn.get() == 2 && p2counters.get() >= PieceData.moveCost(Utils.getPieceType(board[moveSource]),false))) 
 						{
 							if(moveSource != attackSource)
 							{
-								
-								Image newPiece = new Image(db.getString(),64,64,true,true);
-								((ImageView) p.getChildren().get(1)).setImage(newPiece);
-								((ImageView) ((Pane) event.getGestureSource()).getChildren().get(1)).setImage(null);
-								event.setDropCompleted(true);
-								
-								if(board[t * 11 + t2] != 0)
+
+								if(board[temp * 11 + temp2] != 0)
 								{
-									modifyAction(ModifyType.Teleport, moveSource, t * 11 + t2);
+									modifyAction(ModifyType.Teleport, moveSource, temp * 11 + temp2);
 								}
 								else
 								{
-									modifyAction(ModifyType.Move, moveSource, t * 11 + t2);
+									modifyAction(ModifyType.Move, moveSource, temp * 11 + temp2);
 								}							
 								
-								moveTarget = t * 11 + t2;
+								moveTarget = temp * 11 + temp2;
 							}
 							else
 							{
@@ -675,24 +683,22 @@ public class App2 extends Application {
 						{
 							statusConsole.appendText("not enough counters!\n");
 						}
-						
+
 					}
-					else {
-						event.setDropCompleted(false);
-					}
-					event.consume();
+					
+					
 				});
 				
+				p.setOnMouseReleased(e -> p.setMouseTransparent(false));
+	
 			}
 		}
 		
 		
-		//sizings
-		console.setPrefSize(200, 200);
-		main.setLeft(initBoard(grid));
-		main.setBottom(menu);
-		main.setRight(rightSide);
-		BorderPane.setMargin(rightSide, new Insets(25));
+
+		main.getChildren().addAll(initBoard(grid),rightSide,menu);
+
+		
 		
 		/*
 		 * Connection pop-up
@@ -875,7 +881,8 @@ public class App2 extends Application {
 					for (int[] is : n) {
 						int x = is[0];
 	 					int y = is[1];
-						if(squareContent(x,y) != null) {
+	 					int pos = x*11 + y;
+						if(squareContent(board[pos]) != null) {
 							//((Rectangle)(sqArray[y][x].getChildren().get(0))).setStyle("-fx-background-image: ");
 							//((Rectangle)(sqArray[y][x].getChildren().get(0))).setFill(new Color(1.0, 0.3, 0.4, 1));
 						}
@@ -889,7 +896,8 @@ public class App2 extends Application {
 					for (int[] is : n2) {
 						int x = is[0];
 	 					int y = is[1];
-	 					if(squareContent(x,y) != null) {
+	 					int pos = x*11 + y;
+	 					if(squareContent(board[pos]) != null) {
 								//((Rectangle)(sqArray[y][x].getChildren().get(0))).setFill(new Color(85.0/255,80.0/255,79.0/255,(256-87.0)/255));
 						}
 						else {
@@ -942,38 +950,43 @@ public class App2 extends Application {
 					for (int[] is : n) {
 						int x = is[0];
 	 					int y = is[1];
+	 					int pos = x*11 + y;
+	 					System.out.println("added "+x+", "+y+" smpm : "+placementMode+" "+ARIntersection.size());
 	 					
-	 					System.out.println("added "+x+", "+y+" smpm : "+spikeMarkPlacementMode+" "+ARIntersection.size());
-	 					
-	 					if(squareContent(x,y) == null) {
+	 					if(squareContent(board[pos]) == null) {
 		 					if(attackMode) {
 		 						((ImageView)(sqArray[y][x].getChildren().get(1))).setImage(new Image(getClass().getClassLoader().getResource("resources/att_marker.png").toExternalForm(),64,64,true,true));
 		 					}
 		 					else if(markingMode){
 		 						((ImageView)(sqArray[y][x].getChildren().get(1))).setImage(new Image(getClass().getClassLoader().getResource("resources/mark_marker.png").toExternalForm(),64,64,true,true));
 		 					}
-		 					else if(queensMarkPlacementMode)
-		 					{
-		 						for(int i = 0; i<ARIntersection.size(); i++ )
-		 						{
-		 							if(ARIntersection.get(i)[0] == y && ARIntersection.get(i)[1] == x) {
-		 								System.out.println("y, x = "+y+", "+x);
-		 								((ImageView)(sqArray[y][x].getChildren().get(1))).setImage(new Image(getClass().getClassLoader().getResource("resources/queen_marker.png").toExternalForm(),64,64,true,true));
-		 							}
-		 								
-		 						}
-		 						
-		 					}
+		 					
 		 					else if(board[showingPiece.get()] != 0)
 		 					{
-		 						if(Utils.getPieceType(board[showingPiece.get()]) == prince && spikeMarkPlacementMode)
+		 						if(placementMode == 1)
+			 					{
+			 						for(int i = 0; i<ARIntersection.size(); i++ )
+			 						{
+			 							if(ARIntersection.get(i)[0] == y && ARIntersection.get(i)[1] == x) {
+			 								System.out.println("y, x = "+y+", "+x);
+			 								((ImageView)(sqArray[y][x].getChildren().get(1))).setImage(new Image(getClass().getClassLoader().getResource("resources/queen_marker.png").toExternalForm(),64,64,true,true));
+			 							}
+			 								
+			 						}
+			 						
+			 					}
+		 						else if(Utils.getPieceType(board[showingPiece.get()]) == prince && placementMode == 2)
 		 						{
 		 							System.out.println("spike fx at y, x = "+y+", "+x);
 			 						((ImageView)(sqArray[y][x].getChildren().get(1))).setImage(new Image(getClass().getClassLoader().getResource("resources/spike_marker.png").toExternalForm(),64,64,true,true));
 		 						}
-		 						else if(Utils.getPieceType(board[showingPiece.get()]) == guardian && defenseMarkPlacementMode)
+		 						else if(Utils.getPieceType(board[showingPiece.get()]) == guardian && placementMode == 3)
 		 						{
 		 							((ImageView)(sqArray[y][x].getChildren().get(1))).setImage(new Image(getClass().getClassLoader().getResource("resources/defense_marker.png").toExternalForm(),64,64,true,true));
+		 						}
+		 						else if(Utils.getPieceType(board[showingPiece.get()]) == vanguard && placementMode == 4)
+		 						{
+		 							((ImageView)(sqArray[y][x].getChildren().get(1))).setImage(new Image(getClass().getClassLoader().getResource("resources/teleport_marker.png").toExternalForm(),64,64,true,true));
 		 						}
 		 						
 		 					}
@@ -994,7 +1007,8 @@ public class App2 extends Application {
 					for (int[] is : n2) {
 						int x = is[0];
 	 					int y = is[1];
-	 					if(squareContent(x,y) != null) {
+	 					int pos = x*11 +y;
+	 					if(squareContent(board[pos]) != null) {
 								((Rectangle)(sqArray[y][x].getChildren().get(0))).setFill(new Color(85.0/255,80.0/255,79.0/255,(256-87.0)/255));
 						}
 						else {
@@ -1021,11 +1035,11 @@ public class App2 extends Application {
 							int x = is[0];
 							int y = is[1];
 							
-							if(defenseMarkPlacementMode)
+							if(placementMode == 3)
 							{
 								((ImageView)(sqArray[y][x].getChildren().get(3))).setImage(new Image(getClass().getClassLoader().getResource("resources/defense_fx.png").toExternalForm(),64,64,true,true));
 							}
-							else if(spikeMarkPlacementMode)
+							else if(placementMode == 2)
 							{
 								((ImageView)(sqArray[y][x].getChildren().get(3))).setImage(new Image(getClass().getClassLoader().getResource("resources/spike_attack_fx.png").toExternalForm(),64,64,true,true));
 							}
@@ -1065,27 +1079,21 @@ public class App2 extends Application {
 	
 		scene.addEventHandler(KeyEvent.KEY_PRESSED, key -> {
 			if(key.getCode() == KeyCode.SHIFT) {
-				defenseMarkPlacementMode = false;
-				queensMarkPlacementMode = false;
-				spikeMarkPlacementMode = false;
+				placementMode = 0;
 				attackMode = true;
 				attackSource = showingPiece.get();
 				legalMovesObs.clear();
 				getRange();
 			}
 			else if(key.getCode() == KeyCode.ALT) {
-				defenseMarkPlacementMode = false;
-				queensMarkPlacementMode = false;
-				spikeMarkPlacementMode = false;
+				placementMode = 0;
 				markingMode = true;
 				markSource = showingPiece.get();
 				legalMovesObs.clear();
 				getRange();
 			}
 			else if(key.getCode() == KeyCode.CONTROL) {
-				defenseMarkPlacementMode = false;
-				queensMarkPlacementMode = false;
-				spikeMarkPlacementMode = false;
+				placementMode = 0;
 				defenseMode = true;
 				defenderSource = showingPiece.get();
 				legalMovesObs.clear();
@@ -1174,10 +1182,11 @@ public class App2 extends Application {
 			
 			if(specialPos[0] != -1) {
 				
-				if(Utils.getMarkInitPlies(board[specialPos[0]]) <= plies - queenMarkTimer)
+				System.out.println("mark plies "+Utils.getMarkInitPlies(board[specialPos[0]]));
+				System.out.println(GameData.queenMarkTimer);
+				if(Utils.getMarkInitPlies(board[specialPos[0]]) <= plies - GameData.queenMarkTimer)
 				{
-					board[specialPos[0]] = instantiatePiece(queen, turn.get(), specialPos[0], 0, PieceData.pieceHP(queen));
-					pieceIdCap++;
+					board[specialPos[0]] = instantiatePiece(queen, Utils.getColor(board[specialPos[0]]), specialPos[0], 0, PieceData.pieceHP(queen));
 					specialPos[0] = -1;
 					redraw(grid);
 				}
@@ -1186,8 +1195,8 @@ public class App2 extends Application {
 			else if(specialPos[1] != -1)
 			{
 
-				System.out.println(Utils.getMarkInitPlies(board[specialPos[1]]) - (plies - spikeMarkTimer)+" plies until activation!");
-				if(Utils.getMarkInitPlies(board[specialPos[1]]) <= plies - spikeMarkTimer)
+				System.out.println(Utils.getMarkInitPlies(board[specialPos[1]]) - (plies - GameData.spikeMarkTimer)+" plies until activation!");
+				if(Utils.getMarkInitPlies(board[specialPos[1]]) <= plies - GameData.spikeMarkTimer)
 				{
 					activateSpikeMark(specialPos[1]);
 					specialPos[1] = -1;
@@ -1215,7 +1224,7 @@ public class App2 extends Application {
 			}
 			else if(specialPos[3] != -1)
 			{
-				if(Utils.getMarkInitPlies(board[specialPos[3]]) <= plies - scarletMarkTimer)
+				if(Utils.getMarkInitPlies(board[specialPos[3]]) <= plies - GameData.scarletMarkTimer)
 				{
 					rangedAction(RangedType.ScarletChannel, specialPos[3], 0);
 					specialPos[3] = -1;
@@ -1247,6 +1256,9 @@ public class App2 extends Application {
 			chooseColor2.setVisible(true);
 			randomColor.setVisible(true);
 			freePlay = false;
+			resetWholeGame();
+			pieceSelector.setVisible(false);
+			//TODO: possibility for saving the modified board window2.show();
 		});
 		
 		connect.setOnAction(e -> {
@@ -1258,6 +1270,9 @@ public class App2 extends Application {
 			chooseColor2.setVisible(true);
 			randomColor.setVisible(true);
 			freePlay = false;
+			resetWholeGame();
+			pieceSelector.setVisible(false);
+			//TODO: possibility for saving the modified board window2.show();
 		});
 		
 		chooseColor1.setOnAction(e -> {
@@ -1293,7 +1308,7 @@ public class App2 extends Application {
 		});
 		
 		startGame.setOnAction(e -> {
-			
+
 			System.out.println(playerColor+" "+otherPlayerColor);
 			
 			if(playerColor < 0 || otherPlayerColor < 0) {
@@ -1334,7 +1349,7 @@ public class App2 extends Application {
 		resignPiece.setOnAction(e -> {
 			
 			int s = showingPiece.get();
-			resignPiece(s);
+			modifyAction(ModifyType.Resign, s, s);
 			
 		});
 		
@@ -1352,12 +1367,14 @@ public class App2 extends Application {
 			System.out.println("dir "+Utils.getPieceRotation(board[s])+" h: "+h);
 			
 			h = Utils.getPieceRotation(board[s]);
-
+			System.out.println("dir "+Utils.getPieceRotation(board[s])+" h: "+h);
 
 			double x = Math.cos((h*Math.PI*2)/360.0);
 			double y = Math.sin((h*Math.PI*2)/360.0);
 			x = Math.round(x);
 			y = Math.round(y);
+			
+			System.out.println("x "+x+" y "+y);
 
 			int dir = 0;
 			
@@ -1383,7 +1400,7 @@ public class App2 extends Application {
 				previousRotation = Utils.getPieceRotation(board[s]);
 			}
 			
-			Utils.doPieceRotation(board[s],dir);
+			board[s] = Utils.doPieceRotation(board[s],dir);
 			rotatedPieceLoc = s;
 			legalMovesObs.clear();
 			Utils.iterateBoard(s,board);
@@ -1406,10 +1423,15 @@ public class App2 extends Application {
 			
 			h = Utils.getPieceRotation(board[s])+180;
 
+			System.out.println("dir "+Utils.getPieceRotation(board[s])+" h: "+h);
+			
 			double x = Math.cos((h*Math.PI*2)/360.0);
 			double y = Math.sin((h*Math.PI*2)/360.0);
 			x = Math.round(x);
 			y = Math.round(y);
+			
+			System.out.println("x "+x+" y "+y);
+			
 			int dir = 0;
 			
 			if(x == 1 && y == 0)
@@ -1436,7 +1458,7 @@ public class App2 extends Application {
 			}
 			
 	
-			Utils.doPieceRotation(board[s],dir);
+			board[s] = Utils.doPieceRotation(board[s],dir);
 			rotatedPieceLoc = s;
 			legalMovesObs.clear();
 			Utils.iterateBoard(s,board);
@@ -1450,6 +1472,17 @@ public class App2 extends Application {
 			randomColor.setVisible(true);
 			
 			window2.show();
+			
+		});
+		
+		clearBoard.setOnAction(e -> {
+			clearBoard();
+		});
+		
+		boardEditor.setOnAction(e -> {
+			if(freePlay) {
+				pieceSelector.setVisible(!pieceSelector.isVisible());
+			}
 			
 		});
 		
@@ -1477,6 +1510,7 @@ public class App2 extends Application {
 				}
 				if(rotatedPieceLoc != -1)
 				{
+					System.out.println(rotatedPieceLoc);
 					int rotationChange = previousRotation - Utils.getPieceRotation(board[rotatedPieceLoc]);
 					
 					if(rotationChange == 270)
@@ -1488,7 +1522,7 @@ public class App2 extends Application {
 						rotationChange = 90;
 					}
 
-					move.add(new int[] {0,4,rotatedPieceLoc,rotationChange});
+					move.add(new int[] {0,2,rotatedPieceLoc,rotationChange,Utils.getPieceType(board[rotatedPieceLoc])});
 				}
 				
 				setTurn(move);
@@ -1536,7 +1570,7 @@ public class App2 extends Application {
 	
 			int h = newValue.intValue();
 			
-			System.out.println("selected: "+newValue);
+			System.out.println("selected: "+newValue+" board[selected]:"+board[newValue.intValue()]);
 			
 			int piece = board[h];
 			int type = Utils.getPieceType(board[h]);
@@ -1567,9 +1601,6 @@ public class App2 extends Application {
 			case 7:
 				pieceMenu.getChildren().addAll(resignPiece,rotateClockwise,rotateCounterClockwise);
 				break;
-			case 8:
-				pieceMenu.getChildren().addAll(resignPiece);
-				break;
 			case 9:
 				pieceMenu.getChildren().addAll(resignPiece,placeScarletMark,rotateClockwise,rotateCounterClockwise);
 			}
@@ -1590,7 +1621,7 @@ public class App2 extends Application {
 			
 			attackMode = false;
 			markingMode = false;
-			queensMarkPlacementMode = true;
+			placementMode = 1;
 			//legalRangeObs.clear();
 			getRange();
 			for(int i = 0; i<legalRangeObs.size(); i++)
@@ -1606,7 +1637,7 @@ public class App2 extends Application {
 		placeSpikeMark.setOnAction(e -> {
 			attackMode = false;
 			markingMode = false;
-			spikeMarkPlacementMode = true;
+			placementMode = 2;
 			getRange();
 
 			
@@ -1615,18 +1646,19 @@ public class App2 extends Application {
 		placeFortressMark.setOnAction(e -> {
 			attackMode = false;
 			markingMode = false;
-			defenseMarkPlacementMode = true;
+			placementMode = 3;
+			getRange();
+		});
+		
+		placeTeleportMark.setOnAction(e -> {
+			placementMode = 4;
 			getRange();
 		});
 		
 		placeScarletMark.setOnAction(e -> {
-			
+			placementMode = 5;
+			getRange();
 		});
-		
-		placeTeleportMark.setOnAction(e -> {
-			
-		});
-		
 
 		promoteSoldier.setOnAction(e -> {
 
@@ -1658,6 +1690,10 @@ public class App2 extends Application {
 				console.setScrollTop(Double.MAX_VALUE);
 			}
 		});
+		
+		
+		p1countersPerTurn.set(0);
+		p2countersPerTurn.set(0);
 	}
 	
 	
@@ -1681,7 +1717,7 @@ public class App2 extends Application {
 	
 	public void confirm(int mode, int data) {
 		if(mode == 1) {
-			statusConsole.appendText("other player is ready...\n");
+			statusConsole.appendText("other player is ready, he chose "+(data == 1 ? "Black" : "Red")+"\n");
 			otherPlayerColor = data;
 			otherPlayerReady = true;
 		}
@@ -1782,7 +1818,7 @@ public class App2 extends Application {
 		s += turn == 1 ? "Red " : "Black ";
 		s += "won by resignation";
 		sb.append(s);
-		console.setText(sb.toString());
+		//console.setText(sb.toString());
 	
 	}
 	
@@ -1840,7 +1876,10 @@ public class App2 extends Application {
 					int pos;
 
 					t = Integer.parseInt(s);
+					System.out.println("reading piece "+t);
 					pos = Utils.getPos(t);
+					System.out.println("position "+pos);
+					board[pos] = t;
 
 //					if(t[0] < 0 && t[1] > 1)
 //					{
@@ -1848,7 +1887,7 @@ public class App2 extends Application {
 //					}
 					
 					//assign vector into board at t[3], t[4]
-					board[pos]= t;
+					
 				}
 				System.out.println(Arrays.toString(line));
 				
@@ -1863,7 +1902,7 @@ public class App2 extends Application {
 			
 			sb.delete(0, sb.length());
 			sb.append("Turn "+(int)(plies/2.0)+":\n");
-			console.setText(sb.toString());
+			//console.setText(sb.toString());
 			redraw(grid);
 			statusConsole.appendText("successfully loaded game "+((Label)p.getChildren().get(1)).getText()+"\n");
 			freader.close();
@@ -1993,7 +2032,7 @@ public class App2 extends Application {
 		
         Message msgObject = new Message(m, Message.Tyyppi.MOVE);
         msgObject.setSender(this.toString());
-        System.out.println("sending move(App2): " +Arrays.toString(move.get(0))+" length "+move.size());
+        System.out.println("sending move(App2) of length "+move.size());
         mesh.broadcast(msgObject);
 		
 	}
@@ -2044,12 +2083,12 @@ public class App2 extends Application {
 				int temp2 = i;
 
 
-				if(squareContent(temp,temp2) != null)
+				if(!(j == 11 || i == 11) && squareContent(board[boardPos]) != null)
 				{
 					
 					//piece.setImage(new Image(getClass().getClassLoader().getResource("resources/"+squareContent(temp,temp2)+".png").toExternalForm(),64,64,true,true));
 					
-					if(squareContent(temp,temp2).equals("mark_a_b")) 
+					if(squareContent(board[boardPos]).equals("mark_a_b")) 
 					{
 						piece.setImage(new Image(getClass().getClassLoader().getResource("resources/mark_a_b.png").toExternalForm(),64,64,true,true));
 						if(Utils.getMarkLvl(board[boardPos]) > 0)
@@ -2061,7 +2100,7 @@ public class App2 extends Application {
 							hpCounter.setText("");
 						}
 					}
-					else if(squareContent(temp,temp2).equals("mark_a_r")) 
+					else if(squareContent(board[boardPos]).equals("mark_a_r")) 
 					{
 						piece.setImage(new Image(getClass().getClassLoader().getResource("resources/mark_a_r.png").toExternalForm(),64,64,true,true));
 						if(Utils.getMarkLvl(board[boardPos]) > 0)
@@ -2074,7 +2113,7 @@ public class App2 extends Application {
 						}
 					}
 					else {
-						piece.setImage(new Image(getClass().getClassLoader().getResource("resources/"+squareContent(temp,temp2)+".png").toExternalForm(),64,64,true,true));
+						piece.setImage(new Image(getClass().getClassLoader().getResource("resources/"+squareContent(board[boardPos])+".png").toExternalForm(),64,64,true,true));
 						if(board[boardPos] < 0)
 						{
 							if(Utils.getMarkLvl(board[boardPos]) > 0)
@@ -2113,7 +2152,7 @@ public class App2 extends Application {
 			
 			}
 		}
-		console.setText(sb.toString());
+		//console.setText(sb.toString());
 		console.appendText("");
 		
 		if(move.size() > 0)
@@ -2177,32 +2216,32 @@ public class App2 extends Application {
 		else if(type == MarkType.Queen)
 		{
 			Utils.modifyCounters(5, turn.get(), 2, false);
-			board[pos] = addData(board[pos], 0, plies);
+			board[pos] = Utils.setMarkInitPlies(board[pos], plies);
 			specialPos[0] = pos;
 			hasQueensMarkOrQueen = true;
 		}
 		else if(type == MarkType.Spike)
 		{
 			specialPos[1] = pos;
-			board[pos] = addData(board[pos], 0, plies);
+			board[pos] = Utils.setMarkInitPlies(board[pos], plies);
 			//get mark neighborhood using iterateBoard and fill markRange observableList 
 			Utils.iterateBoard(pos, board);
 		}
 		else if(type == MarkType.Defense)
 		{
 			specialPos[2] = pos;
-			board[pos] = addData(board[pos], 0, plies);
+			board[pos] = Utils.setMarkInitPlies(board[pos], plies);
 			Utils.iterateBoard(pos, board);
 		}
 		else if(type == MarkType.Scarlet)
 		{
 			specialPos[3] = pos;
-			board[pos] = addData(board[pos], 0, plies);
+			board[pos] = Utils.setMarkInitPlies(board[pos], plies);
 		}
 		else if(type == MarkType.Fractal)
 		{
 			specialPos[4] = pos;
-			board[pos] = addData(board[pos], 0, plies);
+			board[pos] = Utils.setMarkInitPlies(board[pos], plies);
 		}
 		
 		move.add(new int[] {1,type.ordinal(),pos,pos});
@@ -2219,32 +2258,44 @@ public class App2 extends Application {
 	 * piece = piece * p1 + data * p2, where p1, p2 prime
 	 */
 	
-	private int addData(int piece, int dataType, int data) {
+	private int addDataToAuxSlot(int piece, int dataType, int data) {
 		
-		int[] keyPrimesPlies = new int[] {127,131,137};
-		int[] keyPrimesPiece = new int[] {139,149,151};
+//		int[] keyPrimesPlies = new int[] {127,131,137};
+//		int[] keyPrimesPiece = new int[] {139,149,151};
+//		
+//		if(piece % 229 != 0)
+//		{
+//			piece *= 229;
+//		}
+//		
+//
+//		if(dataType == 0)
+//		{
+//			if(piece % keyPrimesPlies[0] != 0) 
+//			{
+//				piece += keyPrimesPlies[0]*data;
+//			}
+//		}
+//		else if(dataType == 1)
+//		{
+//			if(piece % keyPrimesPiece[0] != 0) 
+//			{
+//				piece += keyPrimesPiece[0]*data;
+//			}
+//		}
 		
-		if(piece % 229 != 0)
-			piece *= 229;
+		piece += 19*data;
 		
-		for(int i = 0; i<3; i++) {
-			if(dataType == 0)
-			{
-				if(piece % keyPrimesPlies[i] != 0) 
-				{
-					piece += keyPrimesPlies[i]*data;
-					break;
-				}
-			}
-			else if(dataType == 1)
-			{
-				if(piece % keyPrimesPiece[i] != 0) 
-				{
-					piece += keyPrimesPiece[i]*data;
-					break;
-				}
-			}
-		}
+//		int formatValue = 1000 + dataType * 100;
+//		
+//		for(int i = 0; piece + i % 2000 != formatValue; i++) {
+//			
+//		}
+//		
+//		piece += formatValue;
+//		
+		System.out.println("added data: type = "+dataType+" payload = "+data+" result "+piece);
+
 
 
 		return piece;
@@ -2259,7 +2310,7 @@ public class App2 extends Application {
 	private void upgradeMark(int pos)
 	{
 		Utils.modifyCounters(6, turn.get(), pos, false);
-		Utils.modifyMarkHP(board[pos], 1);
+		Utils.modifyMarkLvl(board[pos], 1);
 		move.add(new int[] {1,7,pos,pos});
 		redraw(grid);
 	}
@@ -2301,7 +2352,7 @@ public class App2 extends Application {
 			int corner3 = area[0] * 11 +area[3];
 			int corner4 = area[1] * 11 +area[3];
 		
-			queenMarkCost = Math.min(Math.min(Utils.getMarkLvl(board[corner1]), Utils.getMarkLvl(board[corner2])), 
+			GameData.queenMarkCost = Math.min(Math.min(Utils.getMarkLvl(board[corner1]), Utils.getMarkLvl(board[corner2])), 
 					Math.min(Utils.getMarkLvl(board[corner3]), Utils.getMarkLvl(board[corner4])));
 
 			for(int i = 0; i<121; i++)
@@ -2372,10 +2423,8 @@ public class App2 extends Application {
 		}
 		
 		hasResignedPiece = true;
-		Utils.modifyCounters(3, turn.get(), 0, false);
+		Utils.modifyCounters(3, turn.get(), Utils.getPieceType(board[pos]), false);
 		board[pos] = 0;
-		
-		move.add(new int[] {0,6,pos,pos,resignedPieceType});
 
 		redraw(grid);
 	}
@@ -2470,8 +2519,7 @@ public class App2 extends Application {
 
 	public void rangedAction(RangedType type, int startValue, int endValue)
 	{
-		int piece1 = board[startValue];
-		int piece2 = board[endValue];
+
 		
 
 		switch(type.ordinal())
@@ -2479,25 +2527,25 @@ public class App2 extends Application {
 		case 0:
 			
 			hasAttacked = true;
-			if(piece1 < 0)
+			if(board[startValue] < 0)
 			{
-				Utils.modifyCounters(1, Utils.getColor(piece1), 0, false);
+				Utils.modifyCounters(1, Utils.getColor(board[startValue]), 0, false);
 			}
-			else if(piece1 > 0)
+			else if(board[startValue] > 0)
 			{
-				Utils.modifyCounters(1, Utils.getColor(piece1), Utils.getPieceType(piece1), false);
+				Utils.modifyCounters(1, Utils.getColor(board[startValue]), Utils.getPieceType(board[startValue]), false);
 			}
 			
 
 			//if target is captured, increment opposing players Counters by captured piece's value
 			
 			//target is a piece:
-			if(piece2 > 0)
+			if(board[endValue] > 0)
 			{
-				System.out.println("hp "+Utils.getPieceHP(piece2));
-				if(Utils.getPieceHP(piece2) == 0)
+				System.out.println("hp "+Utils.getPieceHP(board[endValue]));
+				if(Utils.getPieceHP(board[endValue]) == 0)
 				{
-					Utils.modifyCounters(3,Utils.getColor(piece1),Utils.getPieceType(piece2),false);
+					Utils.modifyCounters(3,Utils.getColor(board[startValue]),Utils.getPieceType(board[endValue]),false);
 					if(endValue == moveTarget || endValue == markSource || endValue == defenderSource)
 					{
 						
@@ -2506,21 +2554,21 @@ public class App2 extends Application {
 				}
 				else
 				{
-					Utils.modifyPieceHP(piece2, -1);
+					board[endValue] = Utils.modifyPieceHP(board[endValue], -1);
 					
 				}
 			}
 			//target is a mark:
-			else if(piece2 < 0){
-				if(Utils.getMarkLvl(piece2) == 0)
+			else if(board[endValue] < 0){
+				if(Utils.getMarkLvl(board[endValue]) == 0)
 				{
-					Utils.modifyCounters(4, Utils.getColor(piece2), 0, false);
+					Utils.modifyCounters(4, Utils.getColor(board[endValue]), 0, false);
 					
 					board[endValue] = 0;
 				}
 				else
 				{
-					Utils.modifyMarkHP(piece2, -1);
+					board[endValue] = Utils.modifyMarkLvl(board[endValue], -1);
 				}
 			}
 			
@@ -2533,24 +2581,36 @@ public class App2 extends Application {
 			break;
 		case 1:
 			hasDefended = true;
-			if(piece1 > 0)
+			if(board[startValue] > 0)
 			{
-				Utils.modifyCounters(2, Utils.getColor(piece1), Utils.getPieceType(piece1), false);
+				Utils.modifyCounters(2, Utils.getColor(board[startValue]), Utils.getPieceType(board[startValue]), false);
 			}
-			else if(piece1 < 0)
+			else if(board[startValue] < 0)
 			{
-				Utils.modifyCounters(2, Utils.getColor(piece1), 0, false);
+				Utils.modifyCounters(2, Utils.getColor(board[startValue]), 0, false);
 			}
 			
 			//increment targets hp counter
-			Utils.modifyPieceHP(piece2, 1);
+			board[endValue] = Utils.modifyPieceHP(board[endValue], 1);
 			break;
 
 		}
-
-		testQueensMarkCondition(turn.get());
 		
-		move.add(new int[] {2,type.ordinal(),startValue,endValue, Utils.getPieceType(piece1)});
+		boolean opponentHasPiecesLeft = false;
+		for(int i = 0; i<121; i++) {
+			if(board[i] > 0 && !Utils.isColor(board[i], turn.get())) {
+				opponentHasPiecesLeft = true;
+			}
+		}
+
+		if(!opponentHasPiecesLeft)
+		{
+			victoryAchieved = true;
+		}
+		
+		testQueensMarkCondition(turn.get());
+
+		move.add(new int[] {2,type.ordinal(),startValue,endValue, Utils.getPieceType(board[startValue])});
 		
 		redraw(grid);
 	}
@@ -2585,13 +2645,15 @@ public class App2 extends Application {
 			moved = true;
 			if(teleporting)
 			{
-				board[endValue] = addData(board[endValue] , 0, plies);
-				board[endValue] = addData(board[endValue] , 1, board[pos]);
+				board[endValue] = addDataToAuxSlot(board[endValue] , 0, plies);
+				board[endValue] = addDataToAuxSlot(board[endValue] , 1, board[pos]);
 			}
 			
-
+			System.out.println("moving to "+endValue+" board[pos]"+board[pos]);
 			//update piece coordinates
-			Utils.setPos(piece, endValue);
+			
+			piece = Utils.setPos(piece, endValue);
+			System.out.println("board[pos] "+board[pos]);
 			
 			//remove defending hp counters
 			if(Utils.getPieceHP(piece) > PieceData.pieceHP(Utils.getPieceType(piece)))
@@ -2613,7 +2675,6 @@ public class App2 extends Application {
 		else if(type == ModifyType.Promote)
 		{
 			board[pos] = instantiatePiece(general, turn.get(), pos, 0, PieceData.pieceHP(general));
-			pieceIdCap++;
 		}
 		else if(type == ModifyType.Resign)
 		{
@@ -2693,19 +2754,19 @@ public class App2 extends Application {
 					switch(type) {
 					
 						case 0:
-							sb.append(Utils.pieceName(pieceType)+" to "+Utils.charConv(target)+"\n");
+							console.appendText(Utils.pieceName(pieceType)+" to "+Utils.charConv(target)+"\n");
 							break;
 						case 1:
-							sb.append("teleported "+Utils.pieceName(pieceType)+" from "+Utils.charConv(source)+" to "+Utils.charConv(target));
+							console.appendText("teleported "+Utils.pieceName(pieceType)+" from "+Utils.charConv(source)+" to "+Utils.charConv(target));
 							break;
 						case 2:
-							sb.append("rotated "+Utils.pieceName(pieceType)+" at "+Utils.charConv(source)+" by "+target+"\n");
+							console.appendText("rotated "+Utils.pieceName(pieceType)+" at "+Utils.charConv(source)+" by "+target+"\n");
 							break;
 						case 3:
-							sb.append("resigned "+Utils.pieceName(pieceType)+" previously at "+Utils.charConv(source)+"\n");
+							console.appendText("resigned "+Utils.pieceName(pieceType)+" previously at "+Utils.charConv(source)+"\n");
 							break;
 						case 5:
-							sb.append("promoted new General at "+Utils.charConv(source)+"\n");
+							console.appendText("promoted new General at "+Utils.charConv(source)+"\n");
 							break;
 					}
 					break;
@@ -2714,28 +2775,28 @@ public class App2 extends Application {
 					switch(type) {
 					
 						case 0:
-							sb.append("area mark placed at "+Utils.charConv(source)+"\n");
+							console.appendText("area mark placed at "+Utils.charConv(source)+"\n");
 							break;
 						case 1:
-							sb.append("teleport mark placed at "+Utils.charConv(source)+"\n");
+							console.appendText("teleport mark placed at "+Utils.charConv(source)+"\n");
 							break;
 						case 2:
-							sb.append("spike mark placed at "+Utils.charConv(source)+"\n");
+							console.appendText("spike mark placed at "+Utils.charConv(source)+"\n");
 							break;
 						case 3:
-							sb.append("defense mark placed at "+Utils.charConv(source)+"\n");
+							console.appendText("defense mark placed at "+Utils.charConv(source)+"\n");
 							break;
 						case 4:
-							sb.append("placed Queens Mark at "+Utils.charConv(source)+"\n");
+							console.appendText("placed Queens Mark at "+Utils.charConv(source)+"\n");
 							break;
 						case 5:
-							sb.append("fractal mark placed at "+Utils.charConv(source)+"\n");
+							console.appendText("fractal mark placed at "+Utils.charConv(source)+"\n");
 							break;
 						case 6:
-							sb.append("scarlet mark placed at "+Utils.charConv(source)+"\n");
+							console.appendText("scarlet mark placed at "+Utils.charConv(source)+"\n");
 							break;
 						case 7:
-							sb.append("mark upgraded at "+Utils.charConv(source)+"\n");
+							console.appendText("mark upgraded at "+Utils.charConv(source)+"\n");
 							break;
 						
 					}
@@ -2746,11 +2807,11 @@ public class App2 extends Application {
 					{
 						if(board[source] == 0) 
 						{
-							sb.append("attacked "+Utils.charConv(target)+" by spike mark at "+Utils.charConv(source)+"\n");
+							console.appendText("attacked "+Utils.charConv(target)+" by spike mark at "+Utils.charConv(source)+"\n");
 						}
 						else
 						{
-							sb.append("attacked "+Utils.charConv(target)+" by "+Utils.pieceName(pieceType)+" at "+Utils.charConv(source)+"\n");
+							console.appendText("attacked "+Utils.charConv(target)+" by "+Utils.pieceName(pieceType)+" at "+Utils.charConv(source)+"\n");
 						}
 						
 					}
@@ -2758,21 +2819,21 @@ public class App2 extends Application {
 					{
 						if(board[source] == 0) 
 						{
-							sb.append("defended "+Utils.charConv(target)+" by defense mark at "+Utils.charConv(source)+"\n");
+							console.appendText("defended "+Utils.charConv(target)+" by defense mark at "+Utils.charConv(source)+"\n");
 						}
 						else
 						{
-							sb.append("defended "+Utils.charConv(subMove[3])+" by "+Utils.pieceName(pieceType)+" at "+Utils.charConv(source)+"\n");
+							console.appendText("defended "+Utils.charConv(subMove[3])+" by "+Utils.pieceName(pieceType)+" at "+Utils.charConv(source)+"\n");
 						}
 						
 					}
 					else if(type == 2)
 					{
-						sb.append("spike mark at "+Utils.charConv(source)+" activated!\n");
+						console.appendText("spike mark at "+Utils.charConv(source)+" activated!\n");
 					}
 					else if(type == 3)
 					{
-						sb.append("defense mark at "+Utils.charConv(source)+" activated!\n");
+						console.appendText("defense mark at "+Utils.charConv(source)+" activated!\n");
 					}
 					
 					break;
@@ -2783,11 +2844,11 @@ public class App2 extends Application {
 
 		if(move.size() == 0)
 		{
-			sb.append("pass\n");
+			console.appendText("pass\n");
 		}
 		
 		if(!gameRunning) {
-			sb.append((turn.get()-1 == 1 ? "Black " : "Red ")+"won by area capture!");
+			console.appendText((turn.get()-1 == 1 ? "Black " : "Red ")+"won by area capture!");
 		}
 		else 
 		{
@@ -2795,16 +2856,16 @@ public class App2 extends Application {
 			{
 				if(turnNo % 1 == 0)
 				{
-					sb.append("\n-------------------------------\nTurn "+(int)turnNo+". \n\n");
+					console.appendText("\n-------------------------------\nTurn "+(int)turnNo+". \n\n");
 				}
 				else
 				{
-					sb.append("––\n");
+					console.appendText("––\n");
 				}
 			}
 		}
 		
-		console.setText(sb.toString());
+		//console.setText(sb.toString());
 		console.appendText("");		
 		resetGameData();			
 		legalMoves = null;
@@ -2829,15 +2890,8 @@ public class App2 extends Application {
 	 * form necessary string for a piece or mark to get the corresponding image from resources/
 	 */
 	
-	private String squareContent(int x, int y) {
-		if(x == 11 || y == 11)
-		{
-			return null;
-		}
-		
-		int element = board[x * 11 + y];
-
-		
+	private String squareContent(int element) {
+	
 		if(element == 0) {
 			return null;
 		}
@@ -2850,11 +2904,10 @@ public class App2 extends Application {
 		{
 			type = "mark";
 			subType = Utils.getMarkType(element).toString().toLowerCase().charAt(0);
-			System.out.println("subtype"+subType);
 		}
 		else
 		{
-			System.out.println(element);
+			//System.out.println("element "+element);
 			subType = PieceData.pieceChar(Utils.getPieceType(element));
 		}
 		
@@ -2901,14 +2954,14 @@ public class App2 extends Application {
 		
 		String s = "237568";
 
-		for(int i = 0, z1 = 0, z2 = 0, z3 = 2, z4 = 1; i<121; i++, z1 = i/11, z2 = i % 11, z3 += 2, z4 += 2) {
+		for(int i = 0, z1 = 0, z2 = 0; i<121; i++, z1 = i/11, z2 = i % 11) {
 			int type = 0;
 			if(i >= 22 && i < 99) {
 				board[i] = 0;
 				continue;
 			}
 			if(z1 == 0 || z1 == 10) {
-				if(z2 < 5)
+				if(z2 < 6)
 				{
 					type = Integer.parseInt(""+s.charAt(z2));
 				}
@@ -2953,6 +3006,19 @@ public class App2 extends Application {
 		for(int i = 0; i<121; i++) {
 			board[i] = 0;
 		}
+		for(int x = 0; x<11; x++) {
+			for(int y = 0; y<11; y++)
+			{
+				if(Math.pow(-1, x+y) == 1) {
+					((Rectangle)(sqArray[x][y].getChildren().get(0))).setFill(gridColor2);
+				}
+				else {
+					((Rectangle)(sqArray[x][y].getChildren().get(0))).setFill(gridColor1);
+				}
+			}
+		}
+		
+		redraw(grid);
 	}
 	
 	
@@ -2971,8 +3037,10 @@ public class App2 extends Application {
 	
 	public int instantiatePiece(int type, int color, int position, int rotation, int hp)
 	{
-
-		return 121 * Utils.makeId(type,color,position) + position + 46 * 121 * rotation + 46 * 121 * 4 * hp;
+		System.out.print("instantiate piece: type = "+type+" color = "+color+" position = "+position+" rotation = "+rotation+" hp = "+hp+" ");
+		int t = 121 * Utils.makeId(type,color,position) + position + 47 * 121 * rotation + 47 * 121 * 4 * hp;
+		System.out.println("result = "+t);
+		return 121 * Utils.makeId(type,color,position) + position + 47 * 121 * rotation + 47 * 121 * 4 * hp;
 	}
 	
 	public int instantiateMark(int type, int color, int position, int lvl)
@@ -2990,6 +3058,8 @@ public class App2 extends Application {
 		x += 14 * position;
 		
 		x += 14 * 121 * lvl;
+		
+		System.out.println("instantiate mark : type = "+type+" color "+color+" position "+position+" lvl "+lvl);
 		
 		return -x;
 	}
