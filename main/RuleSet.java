@@ -331,7 +331,7 @@ public class RuleSet {
 					tx = sx;
 					ty = 10;
 				}
-				else if(rotation == -90)
+				else if(rotation == 270)
 				{
 					tx = sx;
 					ty = 0;
@@ -354,7 +354,7 @@ public class RuleSet {
 					tx = sx;
 					ty = 0;
 				}
-				else if(rotation == -90)
+				else if(rotation == 270)
 				{
 					tx = sx;
 					ty = 10;

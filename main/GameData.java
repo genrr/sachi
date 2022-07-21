@@ -66,4 +66,9 @@ public class GameData {
 		return 1;
 	}
 	
+	public static int getTeleportMarkCost(int color)
+	{
+		return 1;
+	}
+	
 }

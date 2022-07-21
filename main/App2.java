@@ -20,13 +20,11 @@ import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
-import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
-import javafx.scene.control.Separator;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.image.Image;
@@ -34,7 +32,6 @@ import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseEvent;
-import javafx.scene.layout.Border;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
@@ -82,6 +79,7 @@ public class App2 extends Application {
 	
 	private static boolean gameRunning = true;
 	private static boolean freePlay = true;
+	private static boolean boardEditorOpen = false;
 	private static boolean attackMode = false;
 	private static boolean defenseMode = false;
 	private static boolean markingMode = false;
@@ -215,6 +213,7 @@ public class App2 extends Application {
 		pieceSelector.setPrefWrapLength(64*9);
 		lowerMenuCont.setMaxWidth(9*64);
 		
+		clearBoard.setVisible(false);
 		pieceSelector.setVisible(false);
 		chooseColor1.setVisible(false);
 		chooseColor2.setVisible(false);
@@ -321,7 +320,7 @@ public class App2 extends Application {
 				
 
 				p.setOnMousePressed(e -> {
-		
+
 					p.setMouseTransparent(true);
 					
 					if(pieceSelector.isVisible())
@@ -346,6 +345,7 @@ public class App2 extends Application {
 					 * (freePlay && ((a.color == turn.get()) || attackMode)) ||
 					 * a.color == playerColor || attackMode
 					 */
+					
 					
 					if(board[boardPos] == 0 || (freePlay && Utils.isColor(board[boardPos],turn.get())) ||
 							(!freePlay && Utils.isColor(board[boardPos], playerColor)) ||
@@ -504,15 +504,21 @@ public class App2 extends Application {
 									
 									if(!hasDefended) 
 									{
-										if(board[boardPos] > 0 && Utils.isColor(board[defenderSource], turn.get()) && Utils.isColor(board[boardPos], turn.get()))
+										if(Utils.getPieceHP(board[boardPos]) < 5) 
 										{
-											rangedAction(RangedType.Defend, defenderSource, t * 11 + t2);
+											if(board[boardPos] > 0 && Utils.isColor(board[defenderSource], turn.get()) && Utils.isColor(board[boardPos], turn.get()))
+											{
+												rangedAction(RangedType.Defend, defenderSource, t * 11 + t2);
+											}
+											else
+											{
+												statusConsole.appendText("defend source or target are wrong!\n");
+											}
 										}
 										else
 										{
-											statusConsole.appendText("defend source or target are wrong!\n");
+											statusConsole.appendText("piece has already maximum health!\n");
 										}
-										
 									}
 									else
 									{
@@ -567,25 +573,53 @@ public class App2 extends Application {
 							{
 								if(placementMode == 2)
 								{
-									System.out.println("spike mark placement!");
-									if((turn.get() == 1 && p1counters.get() >= GameData.getSpikeMarkCost(turn.get())) ||
-											turn.get() == 2 && p2counters.get() >= GameData.getSpikeMarkCost(turn.get())) {
-										System.out.print("placing spike mark!\n");
-										placeMark(boardPos, MarkType.Spike);
+									if(specialPos[1] == -1) 
+									{
+										System.out.println("spike mark placement!");
+										if((turn.get() == 1 && p1counters.get() >= GameData.getSpikeMarkCost(turn.get())) ||
+												turn.get() == 2 && p2counters.get() >= GameData.getSpikeMarkCost(turn.get())) {
+											System.out.print("placing spike mark!\n");
+											placeMark(boardPos, MarkType.Spike);
+										}
+										else {
+											statusConsole.appendText("not enough counters!\n");
+										}
 									}
-									else {
-										statusConsole.appendText("not enough counters!\n");
+									else
+									{
+										statusConsole.appendText("spike mark already placed!\n");
 									}
+									
 								}
 								else if(placementMode == 3)
 								{
-									System.out.println("defense mark placement!");
-									if((turn.get() == 1 && p1counters.get() >= GameData.getDefenseMarkCost(turn.get())) ||
-											turn.get() == 2 && p2counters.get() >= GameData.getDefenseMarkCost(turn.get())) {
-										System.out.print("placing defense mark!\n");
-										placeMark(boardPos, MarkType.Defense);
+									if(specialPos[2] == -1)
+									{
+										System.out.println("defense mark placement!");
+										if((turn.get() == 1 && p1counters.get() >= GameData.getDefenseMarkCost(turn.get())) ||
+												turn.get() == 2 && p2counters.get() >= GameData.getDefenseMarkCost(turn.get())) {
+											System.out.print("placing defense mark!\n");
+											placeMark(boardPos, MarkType.Defense);
+										}
+										else {
+											statusConsole.appendText("not enough counters!\n");
+										}
 									}
-									else {
+									else
+									{
+										statusConsole.appendText("defense mark already placed!\n");
+									}
+									
+								}
+								else if(placementMode == 4)
+								{
+									System.out.println("teleport mark placement!");
+									if(Utils.hasCounters(turn.get(), "teleport mark placement"))
+									{
+										placeMark(boardPos, MarkType.Teleport);
+									}
+									else
+									{
 										statusConsole.appendText("not enough counters!\n");
 									}
 								}
@@ -622,8 +656,8 @@ public class App2 extends Application {
 					
 					p.startFullDrag();
 					System.out.println("drag event from "+p.toString());
-					p.setLayoutX(event.getSceneX());
-					p.setLayoutY(event.getSceneY());
+//					p.setLayoutX(event.getSceneX());
+//					p.setLayoutY(event.getSceneY());
 				});
 				
 				p.setOnMouseDragOver((MouseDragEvent event) -> {
@@ -662,17 +696,26 @@ public class App2 extends Application {
 						{
 							if(moveSource != attackSource)
 							{
-
-								if(board[temp * 11 + temp2] != 0)
+								if(moveSource != rotatedPieceLoc)
 								{
-									modifyAction(ModifyType.Teleport, moveSource, temp * 11 + temp2);
+									if(board[temp*11 +temp2] == 0)
+									{
+										modifyAction(ModifyType.Move, moveSource, temp * 11 + temp2);
+									}
+									else if(board[temp * 11 + temp2] < 0 && Utils.getMarkType(board[temp*11+ temp2]) == MarkType.Teleport)
+									{
+										modifyAction(ModifyType.Teleport, moveSource, temp * 11 + temp2);
+									}
+						
+									
+									moveTarget = temp * 11 + temp2;
 								}
 								else
 								{
-									modifyAction(ModifyType.Move, moveSource, temp * 11 + temp2);
-								}							
+									statusConsole.appendText("this piece was rotated and cannot move during this turn!\n");
+								}
+
 								
-								moveTarget = temp * 11 + temp2;
 							}
 							else
 							{
@@ -1051,7 +1094,7 @@ public class App2 extends Application {
 						for (int[] is : n2) {
 							int x = is[0];
 		 					int y = is[1];
-		 					
+		 					int pos = x*11+ y;		 					
 		 					((ImageView)(sqArray[y][x].getChildren().get(3))).setImage(null);
 		 					
 						}
@@ -1180,14 +1223,14 @@ public class App2 extends Application {
 				turnInfoLabel.setText("Red");
 			}
 			
-			if(specialPos[0] != -1) {
+			if(specialPos[3] != -1) {
 				
-				System.out.println("mark plies "+Utils.getMarkInitPlies(board[specialPos[0]]));
+				System.out.println("mark plies "+Utils.getMarkInitPlies(board[specialPos[3]]));
 				System.out.println(GameData.queenMarkTimer);
-				if(Utils.getMarkInitPlies(board[specialPos[0]]) <= plies - GameData.queenMarkTimer)
+				if(Utils.getMarkInitPlies(board[specialPos[3]]) <= plies - GameData.queenMarkTimer)
 				{
-					board[specialPos[0]] = instantiatePiece(queen, Utils.getColor(board[specialPos[0]]), specialPos[0], 0, PieceData.pieceHP(queen));
-					specialPos[0] = -1;
+					board[specialPos[3]] = instantiatePiece(queen, Utils.getColor(board[specialPos[3]]), specialPos[3], 0, PieceData.pieceHP(queen));
+					specialPos[3] = -1;
 					redraw(grid);
 				}
 
@@ -1212,6 +1255,15 @@ public class App2 extends Application {
 					}
 					else
 					{
+						for (int[] is : markRangeObs) {
+							int x = is[0];
+		 					int y = is[1];
+		 					int pos = x*11+ y;
+		 					if(board[pos] != 0)
+		 					{
+		 						board[pos] = Utils.modifyPieceHP(board[pos], -1);
+		 					}
+						}
 						//finally, destroy the mark itself after 3 plies
 						board[specialPos[2]] = 0;
 						specialPos[2] = -1;
@@ -1222,12 +1274,12 @@ public class App2 extends Application {
 				
 					
 			}
-			else if(specialPos[3] != -1)
+			else if(specialPos[5] != -1)
 			{
-				if(Utils.getMarkInitPlies(board[specialPos[3]]) <= plies - GameData.scarletMarkTimer)
+				if(Utils.getMarkInitPlies(board[specialPos[5]]) <= plies - GameData.scarletMarkTimer)
 				{
-					rangedAction(RangedType.ScarletChannel, specialPos[3], 0);
-					specialPos[3] = -1;
+					rangedAction(RangedType.ScarletChannel, specialPos[5], 0);
+					specialPos[5] = -1;
 				}
 			}
 			else if(specialPos[4] != -1)
@@ -1235,13 +1287,13 @@ public class App2 extends Application {
 				//fractal mark action, black hole effects
 				//placeMark(specialPos)
 			}
-			//specialpos[5] is set after teleport mark has something inside it
-			else if(specialPos[5] != -1)
+			//specialpos[0] is set after teleport mark has something inside it
+			else if(specialPos[0] != -1)
 			{
-				if(Utils.getMarkInitPlies(board[specialPos[5]]) <= plies - 1)
+				if(Utils.getMarkInitPlies(board[specialPos[0]]) <= plies - 1)
 				{
-					teleport(specialPos[5]);
-					specialPos[5] = -1;
+					//teleport(specialPos[0]);
+					specialPos[0] = -1;
 				}
 			}		
 		});
@@ -1258,6 +1310,7 @@ public class App2 extends Application {
 			freePlay = false;
 			resetWholeGame();
 			pieceSelector.setVisible(false);
+			boardEditorOpen = false;
 			//TODO: possibility for saving the modified board window2.show();
 		});
 		
@@ -1272,6 +1325,7 @@ public class App2 extends Application {
 			freePlay = false;
 			resetWholeGame();
 			pieceSelector.setVisible(false);
+			boardEditorOpen = false;
 			//TODO: possibility for saving the modified board window2.show();
 		});
 		
@@ -1363,6 +1417,11 @@ public class App2 extends Application {
 				statusConsole.appendText("only one piece can be rotated!\n");
 				return;
 			}
+			if(moveTarget == s)
+			{
+				statusConsole.appendText("this piece has moved and cannot be rotated during this turn!\n");
+				return;
+			}
 			
 			System.out.println("dir "+Utils.getPieceRotation(board[s])+" h: "+h);
 			
@@ -1416,6 +1475,11 @@ public class App2 extends Application {
 			if(rotatedPieceLoc != -1 && board[s] != board[rotatedPieceLoc])
 			{
 				statusConsole.appendText("only one piece can be rotated!\n");
+				return;
+			}
+			if(moveTarget == s)
+			{
+				statusConsole.appendText("this piece has moved and cannot be rotated during this turn!\n");
 				return;
 			}
 			
@@ -1482,6 +1546,8 @@ public class App2 extends Application {
 		boardEditor.setOnAction(e -> {
 			if(freePlay) {
 				pieceSelector.setVisible(!pieceSelector.isVisible());
+				boardEditorOpen = !boardEditorOpen;
+				clearBoard.setVisible(!clearBoard.isVisible());
 			}
 			
 		});
@@ -1490,6 +1556,9 @@ public class App2 extends Application {
 
 			if(legalMovesObs.size() > 0) {
 				legalMovesObs.clear();
+			}
+			if(markRangeObs.size() > 0) {
+				markRangeObs.clear();
 			}
 			p1counters.set(tempCounters[0]);
 			p1countersPerTurn.set(tempCounters[1]);
@@ -1817,7 +1886,7 @@ public class App2 extends Application {
 		String s = "\n";
 		s += turn == 1 ? "Red " : "Black ";
 		s += "won by resignation";
-		sb.append(s);
+		console.appendText(s);
 		//console.setText(sb.toString());
 	
 	}
@@ -1881,10 +1950,15 @@ public class App2 extends Application {
 					System.out.println("position "+pos);
 					board[pos] = t;
 
-//					if(t[0] < 0 && t[1] > 1)
-//					{
-//						specialPos[t[1]-2] = t[3];
-//					}
+					if(t < 0 && Utils.getMarkType(t) != MarkType.Area)
+					{
+						specialPos[Utils.getMarkType(t).ordinal() - 1] = pos;
+						
+						if(Utils.getMarkType(t) == MarkType.Spike || Utils.getMarkType(t) == MarkType.Defense){
+							Utils.iterateBoard(pos, board);
+						}
+	
+					}
 					
 					//assign vector into board at t[3], t[4]
 					
@@ -1931,7 +2005,11 @@ public class App2 extends Application {
 		System.out.println(tempCounters[0]+" "+tempCounters[1]+" "+tempCounters[2]+" "+tempCounters[3]);
 		
 		//revert back to state at the start of the turn
-		arrayCopy(tempBoard,board);
+		if(!boardEditorOpen)
+		{
+			arrayCopy(tempBoard,board);
+		}
+		
 
 		
 		
@@ -1995,10 +2073,6 @@ public class App2 extends Application {
 		move.clear();
 
 		
-		if(RuleSet.checkAreas(turn.get(), board))
-		{
-			gameRunning = false;
-		}
 		
 		
 		//advance turn after opponents move was made
@@ -2045,7 +2119,6 @@ public class App2 extends Application {
 		int i2 = 0;
 		int j2 = 0;
 
-		grid.getChildren().clear();
 
 		for(i = isDefaultBoardRotation ? 0 : 11; i<12 && i > -1; i = isDefaultBoardRotation ? i + 1 : i - 1, i2++) {
 			for(j = isDefaultBoardRotation ? 0 : 11; j<12 && j > -1; j = isDefaultBoardRotation ? j + 1 : j - 1, j2 = (j2+1)%12) {
@@ -2079,8 +2152,6 @@ public class App2 extends Application {
 				
 
 				int boardPos = j * 11 + i;
-				int temp = j;
-				int temp2 = i;
 
 
 				if(!(j == 11 || i == 11) && squareContent(board[boardPos]) != null)
@@ -2148,7 +2219,10 @@ public class App2 extends Application {
 
 	
 				GridPane.setConstraints(sqArray[i][j],i2,j2);
-				grid.getChildren().add(sqArray[i][j]);
+				if(!grid.getChildren().contains(sqArray[i][j])) {
+					grid.getChildren().add(sqArray[i][j]);
+				}
+				
 			
 			}
 		}
@@ -2210,20 +2284,19 @@ public class App2 extends Application {
 		
 		if(type == MarkType.Area)
 		{
-			Utils.modifyCounters(5, turn.get(), 1, false);
+			Utils.modifyCounters(5, turn.get(), 0, false);
 			testQueensMarkCondition(pos,turn.get());
 		}
-		else if(type == MarkType.Queen)
+		else if(type == MarkType.Teleport)
 		{
-			Utils.modifyCounters(5, turn.get(), 2, false);
-			board[pos] = Utils.setMarkInitPlies(board[pos], plies);
 			specialPos[0] = pos;
-			hasQueensMarkOrQueen = true;
+			Utils.modifyCounters(5, turn.get(), 1, false);
 		}
 		else if(type == MarkType.Spike)
 		{
 			specialPos[1] = pos;
 			board[pos] = Utils.setMarkInitPlies(board[pos], plies);
+			Utils.modifyCounters(5, turn.get(), 2, false);
 			//get mark neighborhood using iterateBoard and fill markRange observableList 
 			Utils.iterateBoard(pos, board);
 		}
@@ -2231,18 +2304,29 @@ public class App2 extends Application {
 		{
 			specialPos[2] = pos;
 			board[pos] = Utils.setMarkInitPlies(board[pos], plies);
+			Utils.modifyCounters(5, turn.get(), 3, false);
 			Utils.iterateBoard(pos, board);
 		}
-		else if(type == MarkType.Scarlet)
+		else if(type == MarkType.Queen)
 		{
-			specialPos[3] = pos;
+			Utils.modifyCounters(5, turn.get(), 4, false);
 			board[pos] = Utils.setMarkInitPlies(board[pos], plies);
+			specialPos[3] = pos;
+			hasQueensMarkOrQueen = true;
 		}
 		else if(type == MarkType.Fractal)
 		{
 			specialPos[4] = pos;
 			board[pos] = Utils.setMarkInitPlies(board[pos], plies);
+			Utils.modifyCounters(5, turn.get(), 5, false);
 		}
+		else if(type == MarkType.Scarlet)
+		{
+			specialPos[5] = pos;
+			board[pos] = Utils.setMarkInitPlies(board[pos], plies);
+			Utils.modifyCounters(5, turn.get(), 6, false);
+		}
+
 		
 		move.add(new int[] {1,type.ordinal(),pos,pos});
 		
@@ -2474,9 +2558,10 @@ public class App2 extends Application {
 			}
 
 		}
-		
-		ArrayList<Integer> b = new ArrayList<Integer>();
 
+		board[startValue] = 0;
+		redraw(grid);
+		markRangeObs.clear();
 		move.add(new int[] {2,3,startValue,startValue});
 		
 	}
@@ -2520,22 +2605,16 @@ public class App2 extends Application {
 	public void rangedAction(RangedType type, int startValue, int endValue)
 	{
 
-		
 
 		switch(type.ordinal())
 		{
 		case 0:
 			
 			hasAttacked = true;
-			if(board[startValue] < 0)
-			{
-				Utils.modifyCounters(1, Utils.getColor(board[startValue]), 0, false);
-			}
-			else if(board[startValue] > 0)
+			if(board[startValue] > 0)
 			{
 				Utils.modifyCounters(1, Utils.getColor(board[startValue]), Utils.getPieceType(board[startValue]), false);
 			}
-			
 
 			//if target is captured, increment opposing players Counters by captured piece's value
 			
@@ -2562,7 +2641,20 @@ public class App2 extends Application {
 			else if(board[endValue] < 0){
 				if(Utils.getMarkLvl(board[endValue]) == 0)
 				{
-					Utils.modifyCounters(4, Utils.getColor(board[endValue]), 0, false);
+					if(Utils.getMarkType(board[endValue]) == MarkType.Area)
+					{
+						Utils.modifyCounters(4, Utils.getColor(board[endValue]), 0, false);
+					}
+					else if(Utils.getMarkType(board[endValue]) == MarkType.Spike)
+					{
+						specialPos[1] = -1;
+						markRangeObs.clear();
+					}
+					else if(Utils.getMarkType(board[endValue]) == MarkType.Defense)
+					{
+						specialPos[2] = -1;
+						markRangeObs.clear();
+					}
 					
 					board[endValue] = 0;
 				}
@@ -2596,17 +2688,7 @@ public class App2 extends Application {
 
 		}
 		
-		boolean opponentHasPiecesLeft = false;
-		for(int i = 0; i<121; i++) {
-			if(board[i] > 0 && !Utils.isColor(board[i], turn.get())) {
-				opponentHasPiecesLeft = true;
-			}
-		}
 
-		if(!opponentHasPiecesLeft)
-		{
-			victoryAchieved = true;
-		}
 		
 		testQueensMarkCondition(turn.get());
 
@@ -2658,7 +2740,7 @@ public class App2 extends Application {
 			//remove defending hp counters
 			if(Utils.getPieceHP(piece) > PieceData.pieceHP(Utils.getPieceType(piece)))
 			{
-				Utils.modifyPieceHP(piece, -Utils.getPieceHP(piece) + PieceData.pieceHP(Utils.getPieceType(piece)));
+				piece = Utils.modifyPieceHP(piece, -Utils.getPieceHP(piece) + PieceData.pieceHP(Utils.getPieceType(piece)));
 			}
 			
 			//if we have moved a rotated piece, then update rotated piece location to tX,tY
@@ -2725,6 +2807,14 @@ public class App2 extends Application {
 		//attacked from 56 to 33: {type.ranged, type.attack, 56, 33}
 		//spike mark activated from 67: {type.ranged, type.spike, 67, redundant}
 		
+		boolean opponentHasPiecesLeft = false;
+		for(int i = 0; i<121; i++) {
+			if(board[i] > 0 && !Utils.isColor(board[i], turn.get())) {
+				opponentHasPiecesLeft = true;
+			}
+		}
+
+
 		plies++;
 		turnNo = plies/2.0;
 		turn.set((turn.get() % 2)+1);
@@ -2841,16 +2931,27 @@ public class App2 extends Application {
 			}
 		}
 
+		
 
 		if(move.size() == 0)
 		{
 			console.appendText("pass\n");
 		}
 		
-		if(!gameRunning) {
-			console.appendText((turn.get()-1 == 1 ? "Black " : "Red ")+"won by area capture!");
+		
+		if(RuleSet.checkAreas(turn.get(), board)) {
+			console.appendText((turn.get()-1 == 1 ? "Black " : "Red ")+"won by area capture!\n");
+			gameRunning = false;
 		}
-		else 
+		else if(!opponentHasPiecesLeft)
+		{
+			console.appendText((turn.get()-1 == 1 ? "Black " : "Red ")+"won by capturing all enemy pieces!\n");
+			gameRunning = false;
+		}
+		
+		
+		
+		if(gameRunning)
 		{
 			if(turnNo != 1)
 			{
@@ -3029,8 +3130,9 @@ public class App2 extends Application {
 	public void arrayCopy(int[] b1, int[] b2) {
 		for(int i = 0; i < 121; i++)
 		{	
+			System.out.println(b2[i]+" is equal to "+b1[i]);
 			b2[i] = b1[i];
-
+			
 		}
 
 	}

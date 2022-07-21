@@ -62,47 +62,7 @@ public class Utils {
 
 	public static String charConv(int pos) {
 
-		int y = pos % 11;
-
-		String s = "";
-
-		switch (y) {
-		case 0:
-			s += 'a';
-			break;
-		case 1:
-			s += 'b';
-			break;
-		case 2:
-			s += 'c';
-			break;
-		case 3:
-			s += 'd';
-			break;
-		case 4:
-			s += 'e';
-			break;
-		case 5:
-			s += 'f';
-			break;
-		case 6:
-			s += 'g';
-			break;
-		case 7:
-			s += 'h';
-			break;
-		case 8:
-			s += 'i';
-			break;
-		case 9:
-			s += 'j';
-			break;
-		case 10:
-			s += 'k';
-			break;
-		default:
-			s += 'x';
-		}
+		String s = charConv2(pos);
 
 		s += String.valueOf((int) (pos / 11.0) + 1);
 
@@ -231,7 +191,9 @@ public class Utils {
 		// t = getData(0,t);
 		if (t < 0) {
 			t = -t;
-			return Math.floorDiv((t + 1), 14);
+			int temp = Math.floorDiv(t, 14*121);
+			int temp2 = t - 14*121*temp;
+			return Math.floorDiv((temp2 + 1), 14);
 		} 
 		else {
 			return t % 121;
@@ -257,6 +219,11 @@ public class Utils {
 		String s = "237568";
 		String s2 = "114111";
 
+		if(id == 0)
+		{
+			System.out.println("piece "+id+" has malformed format!");
+			return 0;
+		}
 		if (id < 23) {
 			//System.out.println("id = " + id);
 			int i = (int) Math.floor((id - 1) / 2.0);
@@ -294,30 +261,39 @@ public class Utils {
 		else if (actionType == 4) {
 			if (color == 2) {
 				App2.p2countersPerTurn.set(App2.p2countersPerTurn.get() - 1);
-			} else if (color == 1) {
+			} 
+			else if (color == 1) 
+			{
 				App2.p1countersPerTurn.set(App2.p1countersPerTurn.get() - 1);
 			}
 			return;
 		} 
 		else if (actionType == 5) {
-			if (type == 1) {
+			if (type == 0) {
 				if (color == 1) {
 					App2.p1counters.set(App2.p1counters.get() - App2.p1countersPerTurn.get());
 					App2.p1countersPerTurn.set(App2.p1countersPerTurn.get() + 1);
 				} 
-				else if (color == 2) {
+				else if (color == 2) 
+				{
 					App2.p2counters.set(App2.p2counters.get() - App2.p2countersPerTurn.get());
 					App2.p2countersPerTurn.set(App2.p2countersPerTurn.get() + 1);
 				}
 				return;
-			} 
-			else if (type == 2) {
-				if (color == 1) {
-					x = -GameData.getQueenMarkCost(color);
-				} 
-				else if (color == 2) {
-					x = -GameData.getQueenMarkCost(color);
-				}
+			}
+			else if(type == 1) {
+				x = -GameData.getTeleportMarkCost(color);
+			}
+			else if(type == 2) {
+				x = -GameData.getSpikeMarkCost(color);
+			}
+			else if(type == 3) {
+				x = -GameData.getDefenseMarkCost(color);
+			}
+			else if (type == 4) {
+
+				x = -GameData.getQueenMarkCost(color);
+	
 			}
 
 		} 
@@ -325,7 +301,8 @@ public class Utils {
 			if (color == 1) {
 				x = -2 * App2.p1countersPerTurn.get();
 			} 
-			else if (color == 2) {
+			else if (color == 2) 
+			{
 				x = -2 * App2.p2countersPerTurn.get();
 			}
 		}
@@ -333,7 +310,8 @@ public class Utils {
 		if (color == 1) {
 			App2.p1counters.set(App2.p1counters.get() + x);
 		} 
-		else if (color == 2) {
+		else if (color == 2) 
+		{
 			App2.p2counters.set(App2.p2counters.get() + x);
 		}
 
@@ -501,6 +479,10 @@ public class Utils {
 		else if(string.equals("queen mark placement"))
 		{
 			cost = GameData.getQueenMarkCost(color);
+		}
+		else if(string.equals("teleport mark placement"))
+		{
+			cost = GameData.getTeleportMarkCost(color);
 		}
 		
 		if (color == 1) {
